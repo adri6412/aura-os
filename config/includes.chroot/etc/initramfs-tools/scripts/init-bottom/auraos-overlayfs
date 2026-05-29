@@ -92,12 +92,14 @@ if ! $PERSISTENT; then
             mkdir -p "$RW/$OVERLAY_SUBDIR/upper" "$RW/$OVERLAY_SUBDIR/work"
             PERSISTENT=true
             log_begin_msg "AuraOS: persistent overlay on $DATA_DEV (label)"
-            # Scrivi overlay.conf sul root reale così al prossimo avvio usa UUID
+            # Scrivi overlay.conf sul root reale (lower è ro: remount rw, scrivi, rimetti ro)
             FOUND_UUID=$(blkid -o value -s UUID "$DATA_DEV" 2>/dev/null || true)
             if [ -n "$FOUND_UUID" ]; then
+                mount -o remount,rw "$LOWER" 2>/dev/null || true
                 mkdir -p "$LOWER/etc/auraos"
                 printf 'OVERLAY_UUID="%s"\nOVERLAY_SUBDIR="%s"\n' \
                     "$FOUND_UUID" "$OVERLAY_SUBDIR" > "$LOWER/etc/auraos/overlay.conf" 2>/dev/null || true
+                mount -o remount,ro "$LOWER" 2>/dev/null || true
             fi
         fi
     fi

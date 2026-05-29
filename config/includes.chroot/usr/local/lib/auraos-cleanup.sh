@@ -141,6 +141,16 @@ EOF
     log "WARN: nessuna partizione dati disponibile — overlay userà tmpfs (non persistente)"
 fi
 
+# --- Deduplicazione /etc/fstab ---
+# Calamares può aggiungere due volte /boot/efi se rileva sia sda1 (EFI System)
+# sia sda2 (BIOS compat, FAT32). systemd-fstab-generator fallisce con "duplicate".
+# Teniamo solo la prima occorrenza di ogni mount point.
+if [ -f /etc/fstab ]; then
+    awk '!seen[$2]++ || $1~/^#/ || $2=="none" || $2=="swap"' \
+        /etc/fstab > /tmp/fstab.dedup && mv /tmp/fstab.dedup /etc/fstab
+    log "fstab deduplicato"
+fi
+
 # --- Pulizia generale ---
 rm -f /root/.bash_history
 rm -f /etc/machine-id /var/lib/dbus/machine-id
