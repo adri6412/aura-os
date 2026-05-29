@@ -1,0 +1,50 @@
+#!/bin/bash
+# Hook binary: gira su Linux durante ogni rebuild (anche fast/binary-only).
+# Il working directory è la build dir (es. /var/tmp/auraos-build/).
+# Qui possiamo creare symlink Linux veri e correggere i permessi che
+# Windows perde quando i file vengono editati su Windows.
+
+set -e
+
+echo "=== [AuraOS] Finalizzazione immagine (binary hook) ==="
+
+# ── Permessi eseguibili ────────────────────────────────────────────────────────
+# Windows non preserva il bit eseguibile: lo impostiamo qui ogni volta.
+for f in \
+    chroot/lib/live/config/9999-auraos-mode \
+    chroot/usr/local/bin/calamares-kiosk-session \
+    chroot/usr/local/lib/auraos-cleanup.sh \
+    chroot/etc/initramfs-tools/scripts/init-bottom/auraos-overlayfs \
+    chroot/etc/initramfs-tools/hooks/auraos-tools \
+    chroot/usr/local/sbin/auraos-update \
+    chroot/usr/local/sbin/auraos-unlock \
+    chroot/usr/local/sbin/auraos-lock \
+    chroot/usr/local/sbin/auraos-status \
+    chroot/usr/local/sbin/auraos-reset \
+    chroot/usr/local/sbin/auraos-check-updates \
+    chroot/config/hooks/normal/*.hook.chroot 2>/dev/null; do
+    [ -f "$f" ] && chmod +x "$f" && echo "[perm] $f"
+done
+
+# ── Symlink systemd per GDM ────────────────────────────────────────────────────
+# Questi devono essere symlink Linux veri; non possono stare in includes.chroot
+# se il progetto viene editato su Windows (i symlink non vengono preservati).
+
+mkdir -p chroot/etc/systemd/system/graphical.target.wants
+
+# display-manager.service → gdm3
+ln -sf /lib/systemd/system/gdm3.service \
+    chroot/etc/systemd/system/display-manager.service 2>/dev/null \
+    && echo "[symlink] display-manager.service → gdm3" || true
+
+# graphical.target.wants/gdm3.service
+ln -sf /lib/systemd/system/gdm3.service \
+    chroot/etc/systemd/system/graphical.target.wants/gdm3.service 2>/dev/null \
+    && echo "[symlink] graphical.target.wants/gdm3.service" || true
+
+# default.target → graphical.target
+ln -sfn /lib/systemd/system/graphical.target \
+    chroot/etc/systemd/system/default.target 2>/dev/null \
+    && echo "[symlink] default.target → graphical.target" || true
+
+echo "=== [AuraOS] Finalizzazione OK ==="

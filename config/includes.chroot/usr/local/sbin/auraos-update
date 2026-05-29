@@ -54,6 +54,98 @@ chroot "$LOWER" apt-get upgrade -y
 
 echo ""
 echo "[AuraOS] ========================================"
+echo "[AuraOS]  Pacchetti Debian aggiornati."
+echo "[AuraOS] ========================================"
+
+# ── Aggiornamento componenti custom ──────────────────────────────────────────
+update_custom_components() {
+    local LOWER="$1"
+    local VERSIONS_FILE="$LOWER/etc/auraos/versions.conf"
+
+    echo ""
+    echo "[AuraOS] Controllo aggiornamenti componenti custom..."
+
+    # Leggi versioni installate
+    local inst_agh="" inst_auraos=""
+    if [[ -f "$VERSIONS_FILE" ]]; then
+        while IFS='=' read -r k v; do
+            v="${v//\"/}"
+            case "$k" in
+                ADGUARDHOME_VERSION) inst_agh="$v" ;;
+                AURAOS_VERSION)      inst_auraos="$v" ;;
+            esac
+        done < "$VERSIONS_FILE"
+    fi
+
+    # Funzione fetch versione da GitHub
+    gh_latest() {
+        curl -sf --max-time 10 \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${1}/releases/latest" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" \
+            2>/dev/null || echo ""
+    }
+
+    local latest_agh latest_auraos
+    latest_agh=$(gh_latest "AdguardTeam/AdGuardHome")
+    latest_auraos=$(gh_latest "adri6412/aura-os")
+
+    local updated=false
+
+    # ── AdGuardHome ───────────────────────────────────────────────────────────
+    if [[ -n "$latest_agh" && -n "$inst_agh" && "$latest_agh" != "$inst_agh" ]]; then
+        echo "[AuraOS] AdGuardHome: $inst_agh → $latest_agh"
+        local ver="${latest_agh#v}"
+        local url="https://github.com/AdguardTeam/AdGuardHome/releases/download/${latest_agh}/AdGuardHome_linux_amd64.tar.gz"
+        if curl -fsSL --max-time 120 "$url" -o /tmp/agh-update.tar.gz 2>/dev/null; then
+            systemctl stop AdGuardHome 2>/dev/null || true
+            tar -xzf /tmp/agh-update.tar.gz -C /tmp/
+            install -m 0755 /tmp/AdGuardHome/AdGuardHome "$LOWER/opt/AdGuardHome/AdGuardHome"
+            rm -rf /tmp/AdGuardHome /tmp/agh-update.tar.gz
+            sed -i "s/^ADGUARDHOME_VERSION=.*/ADGUARDHOME_VERSION=\"${latest_agh}\"/" "$VERSIONS_FILE"
+            systemctl start AdGuardHome 2>/dev/null || true
+            echo "[AuraOS] AdGuardHome aggiornato a $latest_agh."
+            updated=true
+        else
+            echo "[AuraOS] WARN: impossibile scaricare AdGuardHome $latest_agh, skip."
+        fi
+    elif [[ -n "$inst_agh" ]]; then
+        echo "[AuraOS] AdGuardHome $inst_agh: aggiornato."
+    fi
+
+    # ── Script auraos-* ───────────────────────────────────────────────────────
+    if [[ -n "$latest_auraos" && -n "$inst_auraos" && "$latest_auraos" != "$inst_auraos" ]]; then
+        echo "[AuraOS] AuraOS scripts: $inst_auraos → $latest_auraos"
+        local base_url="https://raw.githubusercontent.com/adri6412/aura-os/${latest_auraos}/config/includes.chroot/usr/local/sbin"
+        local ok=true
+        for script in auraos-update auraos-unlock auraos-lock auraos-status auraos-reset auraos-check-updates; do
+            if curl -fsSL --max-time 30 "${base_url}/${script}" \
+                    -o "$LOWER/usr/local/sbin/${script}.new" 2>/dev/null; then
+                mv "$LOWER/usr/local/sbin/${script}.new" "$LOWER/usr/local/sbin/${script}"
+                chmod +x "$LOWER/usr/local/sbin/${script}"
+            else
+                echo "[AuraOS] WARN: impossibile scaricare $script, skip."
+                rm -f "$LOWER/usr/local/sbin/${script}.new"
+                ok=false
+            fi
+        done
+        if $ok; then
+            sed -i "s/^AURAOS_VERSION=.*/AURAOS_VERSION=\"${latest_auraos}\"/" "$VERSIONS_FILE"
+            echo "[AuraOS] Script auraos-* aggiornati a $latest_auraos."
+            updated=true
+        fi
+    elif [[ -n "$inst_auraos" ]]; then
+        echo "[AuraOS] AuraOS scripts $inst_auraos: aggiornati."
+    fi
+
+    $updated || echo "[AuraOS] Nessun aggiornamento custom disponibile."
+}
+
+# Esegui aggiornamento custom sul lower layer (già sbloccato dal trap)
+update_custom_components "$LOWER"
+
+echo ""
+echo "[AuraOS] ========================================"
 echo "[AuraOS]  Aggiornamento completato."
 echo "[AuraOS]  Riavvia per applicare le modifiche."
 echo "[AuraOS] ========================================"

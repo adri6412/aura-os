@@ -94,10 +94,24 @@ PYEOF
 chmod +x /lib/live/config/9999-auraos-mode 2>/dev/null || true
 chmod +x /usr/local/bin/calamares-kiosk.sh 2>/dev/null || true
 chmod +x /usr/local/lib/auraos-cleanup.sh 2>/dev/null || true
+chmod +x /usr/local/sbin/auraos-check-updates 2>/dev/null || true
+
+# --- Inizializza versions.conf con versione AuraOS (AGH la sovrascrive dopo) ---
+mkdir -p /etc/auraos
+if ! grep -q "^AURAOS_VERSION=" /etc/auraos/versions.conf 2>/dev/null; then
+    sed -i '/^AURAOS_VERSION=/d' /etc/auraos/versions.conf 2>/dev/null || true
+    echo 'AURAOS_VERSION="v1.0.0"' >> /etc/auraos/versions.conf
+fi
 
 mkdir -p /etc/systemd/system/multi-user.target.wants/
 ln -sf /etc/systemd/system/auraos-firstboot.service \
     /etc/systemd/system/multi-user.target.wants/auraos-firstboot.service \
+    2>/dev/null || true
+
+# --- Abilita timer controllo aggiornamenti custom ---
+mkdir -p /etc/systemd/system/timers.target.wants/
+ln -sf /etc/systemd/system/auraos-update-check.timer \
+    /etc/systemd/system/timers.target.wants/auraos-update-check.timer \
     2>/dev/null || true
 
 # --- Flatpak: aggiungi Flathub ---

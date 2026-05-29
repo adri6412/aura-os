@@ -1,0 +1,89 @@
+#!/bin/bash
+# auraos-check-updates — controlla aggiornamenti per componenti custom AuraOS.
+# Sorgente: GitHub releases (AdguardTeam/AdGuardHome, adri6412/aura-os).
+#
+# Utilizzo:
+#   auraos-check-updates            → stampa stato aggiornamenti
+#   auraos-check-updates --notify   → come sopra + notifica desktop se disponibili
+#   auraos-check-updates --check-only → exit 0=aggiornato, 1=aggiornamenti disponibili
+
+set -euo pipefail
+
+VERSIONS_FILE="/etc/auraos/versions.conf"
+RUN_DIR="/run/auraos"
+UPDATE_FLAG="$RUN_DIR/updates-available"
+
+MODE="print"
+[[ "${1:-}" == "--notify" ]]     && MODE="notify"
+[[ "${1:-}" == "--check-only" ]] && MODE="check"
+
+# ── Leggi versioni installate ─────────────────────────────────────────────────
+INSTALLED_AGH=""
+INSTALLED_AURAOS=""
+
+if [[ -f "$VERSIONS_FILE" ]]; then
+    while IFS='=' read -r key val; do
+        val="${val//\"/}"
+        case "$key" in
+            ADGUARDHOME_VERSION) INSTALLED_AGH="$val" ;;
+            AURAOS_VERSION)      INSTALLED_AURAOS="$val" ;;
+        esac
+    done < "$VERSIONS_FILE"
+fi
+
+# ── Funzione: ultima release GitHub ──────────────────────────────────────────
+github_latest() {
+    local repo="$1"
+    curl -sf --max-time 10 \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${repo}/releases/latest" \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" \
+        2>/dev/null || echo ""
+}
+
+# ── Controlla versioni ────────────────────────────────────────────────────────
+LATEST_AGH=$(github_latest "AdguardTeam/AdGuardHome")
+LATEST_AURAOS=$(github_latest "adri6412/aura-os")
+
+UPDATES=()
+
+if [[ -n "$LATEST_AGH" && -n "$INSTALLED_AGH" && "$LATEST_AGH" != "$INSTALLED_AGH" ]]; then
+    UPDATES+=("AdGuardHome: $INSTALLED_AGH → $LATEST_AGH")
+fi
+
+if [[ -n "$LATEST_AURAOS" && -n "$INSTALLED_AURAOS" && "$LATEST_AURAOS" != "$INSTALLED_AURAOS" ]]; then
+    UPDATES+=("AuraOS scripts: $INSTALLED_AURAOS → $LATEST_AURAOS")
+fi
+
+# ── Risultato ─────────────────────────────────────────────────────────────────
+if [[ ${#UPDATES[@]} -eq 0 ]]; then
+    [[ "$MODE" != "check" ]] && echo "[AuraOS] Componenti custom aggiornati."
+    rm -f "$UPDATE_FLAG"
+    exit 0
+fi
+
+# Aggiornamenti disponibili
+mkdir -p "$RUN_DIR"
+printf '%s\n' "${UPDATES[@]}" > "$UPDATE_FLAG"
+
+if [[ "$MODE" != "check" ]]; then
+    echo "[AuraOS] Aggiornamenti disponibili:"
+    printf '  • %s\n' "${UPDATES[@]}"
+    echo "[AuraOS] Esegui: sudo auraos-update"
+fi
+
+if [[ "$MODE" == "notify" ]]; then
+    LOGGED_USER=$(loginctl list-sessions --no-legend 2>/dev/null \
+        | awk '$3 != "root" && $3 != "" {print $3; exit}')
+    if [[ -n "$LOGGED_USER" ]]; then
+        UID_U=$(id -u "$LOGGED_USER" 2>/dev/null || true)
+        DBUS_ADDR="unix:path=/run/user/${UID_U}/bus"
+        BODY="$(printf '%s\n' "${UPDATES[@]}" | head -3 | sed 's/^/• /')\n\nEsegui: sudo auraos-update"
+        sudo -u "$LOGGED_USER" \
+            DBUS_SESSION_BUS_ADDRESS="$DBUS_ADDR" \
+            notify-send -u normal -i system-software-update \
+            "AuraOS — Aggiornamenti disponibili" "$BODY" 2>/dev/null || true
+    fi
+fi
+
+exit 1

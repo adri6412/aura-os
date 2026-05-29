@@ -9,3 +9,4 @@ chmod +x /usr/local/bin/calamares-kiosk-session    2>/dev/null || true
 chmod +x /usr/local/lib/auraos-cleanup.sh          2>/dev/null || true
 chmod +x /etc/initramfs-tools/scripts/init-bottom/auraos-overlayfs 2>/dev/null || true
 chmod +x /etc/initramfs-tools/hooks/auraos-tools   2>/dev/null || true
+chmod +x /usr/local/sbin/auraos-check-updates      2>/dev/null || true

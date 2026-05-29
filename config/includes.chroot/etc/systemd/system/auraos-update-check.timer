@@ -1,0 +1,10 @@
+[Unit]
+Description=AuraOS - Controllo aggiornamenti giornaliero
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=24h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -254,5 +254,12 @@ systemctl enable AdGuardHome.service
 # Abilita esplicitamente 3000 solo per localhost (sicurezza).
 ufw allow from 127.0.0.1 to any port 3000 proto tcp 2>/dev/null || true
 
+# --- Registra versione installata in versions.conf ---
+mkdir -p /etc/auraos
+sed -i "s/^ADGUARDHOME_VERSION=.*/ADGUARDHOME_VERSION=\"${AGH_VERSION}\"/" \
+    /etc/auraos/versions.conf 2>/dev/null || \
+    echo "ADGUARDHOME_VERSION=\"${AGH_VERSION}\"" >> /etc/auraos/versions.conf
+echo "[adguard] Versione registrata in /etc/auraos/versions.conf"
+
 echo "[adguard] AdGuard Home configurato e servizio abilitato"
 echo "=== [AuraOS] AdGuard Home OK ==="

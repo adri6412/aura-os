@@ -1,11 +1,11 @@
 # ISO di output (troppo grande per GitHub)
 output/
 
-# Directory di build (generate da lb)
-build/
-binary/
-chroot/
-cache/
+# Directory di build (generate da lb) — /prefix per limitare alla root del repo
+/build/
+/binary/
+/chroot/
+/cache/
 *.iso
 
 # File di log e stato live-build
