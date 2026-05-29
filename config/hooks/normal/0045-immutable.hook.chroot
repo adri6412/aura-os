@@ -26,18 +26,18 @@ done
 # ── blkid deve essere disponibile nell'initramfs ─────────────────────────────
 # blkid viene dal pacchetto util-linux, già installato.
 # Forza la sua inclusione nell'initramfs aggiungendolo ai binari copiati.
-if ! grep -q "blkid" /etc/initramfs-tools/hooks/auraos-tools 2>/dev/null; then
-    install -d /etc/initramfs-tools/hooks
-    cat > /etc/initramfs-tools/hooks/auraos-tools <<'HOOK'
+install -d /etc/initramfs-tools/hooks
+cat > /etc/initramfs-tools/hooks/auraos-tools <<'HOOK'
 #!/bin/sh
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "$1" in prereqs) prereqs; exit 0 ;; esac
 . /usr/share/initramfs-tools/hook-functions
 copy_exec /sbin/blkid /sbin
+copy_exec /sbin/resize2fs /sbin
+copy_exec /sbin/e2fsck /sbin
 HOOK
-    chmod +x /etc/initramfs-tools/hooks/auraos-tools
-fi
+chmod +x /etc/initramfs-tools/hooks/auraos-tools
 
 # ── Modulo overlay nell'initramfs ─────────────────────────────────────────────
 grep -q "^overlay" /etc/initramfs-tools/modules 2>/dev/null \
