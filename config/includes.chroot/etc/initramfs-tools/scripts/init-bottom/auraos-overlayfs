@@ -60,13 +60,30 @@ if [ -f "$CONF" ]; then
     done < "$CONF"
 fi
 
+# Prova per UUID da overlay.conf
 if [ -n "$OVERLAY_UUID" ]; then
     DATA_DEV=$(blkid -U "$OVERLAY_UUID" 2>/dev/null || true)
     if [ -n "$DATA_DEV" ] && mount -t ext4 -o rw "$DATA_DEV" "$RW" 2>/dev/null; then
-        # Crea la struttura overlay sulla partizione dati se non esiste
         mkdir -p "$RW/$OVERLAY_SUBDIR/upper" "$RW/$OVERLAY_SUBDIR/work"
         PERSISTENT=true
-        log_begin_msg "AuraOS: persistent overlay on $DATA_DEV"
+        log_begin_msg "AuraOS: persistent overlay on $DATA_DEV (UUID)"
+    fi
+fi
+
+# Fallback: cerca per LABEL=auraos-data (funziona anche senza overlay.conf)
+if ! $PERSISTENT; then
+    DATA_DEV=$(blkid -L "auraos-data" 2>/dev/null || true)
+    if [ -n "$DATA_DEV" ] && mount -t ext4 -o rw "$DATA_DEV" "$RW" 2>/dev/null; then
+        mkdir -p "$RW/$OVERLAY_SUBDIR/upper" "$RW/$OVERLAY_SUBDIR/work"
+        PERSISTENT=true
+        log_begin_msg "AuraOS: persistent overlay on $DATA_DEV (label)"
+        # Scrivi overlay.conf sul root reale così al prossimo avvio usa UUID
+        FOUND_UUID=$(blkid -o value -s UUID "$DATA_DEV" 2>/dev/null || true)
+        if [ -n "$FOUND_UUID" ]; then
+            mkdir -p "$LOWER/etc/auraos"
+            printf 'OVERLAY_UUID="%s"\nOVERLAY_SUBDIR="%s"\n' \
+                "$FOUND_UUID" "$OVERLAY_SUBDIR" > "$LOWER/etc/auraos/overlay.conf" 2>/dev/null || true
+        fi
     fi
 fi
 

@@ -64,16 +64,19 @@ sed -i 's/WaylandEnable=false/WaylandEnable=true/' /etc/gdm3/custom.conf 2>/dev/
 
 log "Ricerca partizione dati per overlay persistente..."
 
-# Forza aggiornamento cache blkid (partizioni appena create da Calamares
-# potrebbero non essere ancora visibili nella cache)
+# Forza probe diretto di tutti i device (non dipendere dalla cache blkid
+# che può essere vuota nel chroot Calamares dove udev non gira)
 blkid -g 2>/dev/null || true
-udevadm settle 2>/dev/null || true
+for _dev in /dev/sd?[0-9] /dev/vd?[0-9] /dev/nvme?n?p[0-9]; do
+    [ -b "$_dev" ] && blkid "$_dev" >/dev/null 2>&1 || true
+done
 
-ROOT_UUID=$(findmnt -n -o UUID / 2>/dev/null || true)
+ROOT_DEV=$(findmnt -n -o SOURCE / 2>/dev/null || true)
+ROOT_UUID=$(blkid -o value -s UUID "$ROOT_DEV" 2>/dev/null || true)
 OVERLAY_UUID=""
 OVERLAY_NOTE=""
 
-# 1. Partizione con LABEL=auraos-data (metodo consigliato dalla guida)
+# 1. Partizione con LABEL=auraos-data
 DATA_DEV=$(blkid -L "auraos-data" 2>/dev/null || true)
 if [ -n "$DATA_DEV" ]; then
     DATA_UUID=$(blkid -o value -s UUID "$DATA_DEV" 2>/dev/null || true)
