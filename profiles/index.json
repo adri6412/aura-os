@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "updated": "2026-05-29",
+  "profiles": [
+    {
+      "id": "audio-pipewire",
+      "name": "Audio: PipeWire",
+      "category": "audio",
+      "description": "Stack audio default AuraOS — PipeWire + WirePlumber. Bassa latenza, compatibile Bluetooth.",
+      "conflicts": ["audio-pulseaudio"],
+      "default": true,
+      "url": "https://adri6412.github.io/aura-os/profiles/audio-pipewire.profile"
+    },
+    {
+      "id": "audio-pulseaudio",
+      "name": "Audio: PulseAudio",
+      "category": "audio",
+      "description": "Stack audio classico PulseAudio. Più compatibile con applicazioni legacy.",
+      "conflicts": ["audio-pipewire"],
+      "default": false,
+      "url": "https://adri6412.github.io/aura-os/profiles/audio-pulseaudio.profile"
+    }
+  ]
+}
