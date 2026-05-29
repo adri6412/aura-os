@@ -61,13 +61,13 @@ if [ -f "$CONF" ]; then
 fi
 
 # Espande il filesystem ext4 a tutta la partizione prima di montarlo.
-# Necessario se mkfs ha creato un filesystem più piccolo della partizione
-# (es. Calamares con sda4 non montata). resize2fs è no-op se già corretto.
+# resize2fs esce in ~100ms senza fare nulla se il filesystem è già corretto,
+# quindi è sicuro chiamarlo ad ogni boot. e2fsck NON viene chiamato qui
+# per non rallentare il boot: se il fs ha errori, resize2fs fallisce in
+# silenzio e il mount successivo lo rileverà.
 resize_data_dev() {
     [ -x /sbin/resize2fs ] || return 0
-    local dev="$1"
-    e2fsck -fp "$dev" >/dev/null 2>&1 || true
-    resize2fs "$dev" >/dev/null 2>&1 || true
+    resize2fs "$1" >/dev/null 2>&1 || true
 }
 
 # Prova per UUID da overlay.conf
