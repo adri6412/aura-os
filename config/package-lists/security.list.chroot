@@ -1,0 +1,14 @@
+# Sicurezza e protezione
+ufw
+gufw
+clamav
+clamav-daemon
+clamtk
+
+# Aggiornamenti automatici
+unattended-upgrades
+apt-listchanges
+
+# Firewall e rete
+fail2ban
+rkhunter

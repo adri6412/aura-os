@@ -1,0 +1,11 @@
+#!/bin/bash
+# auraos-lock — riblocca il root reale in sola lettura dopo auraos-unlock.
+
+[[ $EUID -ne 0 ]] && { echo "Errore: eseguire come root (sudo auraos-lock)." >&2; exit 1; }
+
+LOWER="/run/aura-lower"
+[ ! -d "$LOWER/usr" ] && { echo "[AuraOS] Overlay non attivo."; exit 1; }
+
+sync
+mount -o remount,ro "$LOWER"
+echo "[AuraOS] Root bloccato (immutabile)."

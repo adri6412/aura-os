@@ -1,0 +1,86 @@
+# Desktop GNOME base — AuraOS
+gnome-core
+gnome-shell
+gnome-session
+gnome-tweaks
+gnome-shell-extensions
+gnome-themes-extra
+gnome-sushi
+gnome-disk-utility
+gnome-system-monitor
+gnome-screenshot
+gnome-calculator
+gnome-calendar
+gnome-clocks
+gnome-contacts
+gnome-maps
+gnome-weather
+gnome-font-viewer
+gnome-logs
+file-roller
+eog
+totem
+rhythmbox
+gedit
+nautilus
+gdm3
+gvfs
+gvfs-backends
+gvfs-fuse
+xdg-user-dirs
+xdg-user-dirs-gtk
+xdg-utils
+
+# Font moderni
+fonts-noto
+fonts-noto-core
+fonts-liberation
+fonts-dejavu-core
+fonts-ubuntu
+fonts-inter
+ttf-bitstream-vera
+
+# Audio — PipeWire
+pipewire
+pipewire-audio
+pipewire-alsa
+pipewire-pulse
+wireplumber
+pavucontrol
+
+# Rete, bluetooth, stampa
+network-manager
+network-manager-gnome
+blueman
+cups
+system-config-printer
+avahi-daemon
+libnss-mdns
+
+# Estensioni GNOME disponibili nei repo Debian
+# blur-my-shell, hide-activities e auraos-panel vengono installati
+# via hook 0026 (non disponibili come pacchetti Debian)
+gnome-shell-extension-dash-to-dock
+gnome-shell-extension-user-theme
+gnome-shell-extension-desktop-icons-ng
+
+# Virtualizzazione (VMware — inattivo su hardware reale)
+open-vm-tools-desktop
+
+# App Store — GNOME Software con supporto Flatpak
+gnome-software
+gnome-software-plugin-flatpak
+flatpak
+xdg-desktop-portal
+xdg-desktop-portal-gnome
+xdg-desktop-portal-gtk
+
+# Utility
+xdotool
+wmctrl
+openbox
+xclip
+xsel
+libnotify-bin
+zenity
+yad

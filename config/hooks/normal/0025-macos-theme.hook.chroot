@@ -1,0 +1,79 @@
+#!/bin/bash
+# Hook: installa il tema WhiteSur (stile macOS) per GNOME — AuraOS
+
+set -e
+
+echo "=== [AuraOS] Installazione tema WhiteSur (macOS) ==="
+
+apt-get install -y --no-install-recommends git curl unzip 2>/dev/null || true
+
+# ── GTK/Shell Theme: WhiteSur ────────────────────────────────────────────────
+install -d /usr/share/themes
+if [ ! -d /usr/share/themes/WhiteSur-Light ]; then
+    echo "[theme] Download WhiteSur GTK theme..."
+    git clone --depth=1 \
+        https://github.com/vinceliuice/WhiteSur-gtk-theme.git \
+        /tmp/WhiteSur-gtk \
+    && bash /tmp/WhiteSur-gtk/install.sh \
+        --dest /usr/share/themes \
+        --name WhiteSur \
+        --color Light Dark \
+        --theme default \
+        --nautilus-style mojave \
+        2>/dev/null \
+    || { echo "[WARN] installer fallito, provo zip fallback...";
+         curl -sL https://github.com/vinceliuice/WhiteSur-gtk-theme/archive/refs/heads/master.zip \
+             -o /tmp/whitesur-gtk.zip \
+         && unzip -q /tmp/whitesur-gtk.zip -d /tmp/ \
+         && bash /tmp/WhiteSur-gtk-theme-master/install.sh \
+                --dest /usr/share/themes --name WhiteSur \
+                --color Light Dark 2>/dev/null \
+         && rm -f /tmp/whitesur-gtk.zip; }
+    rm -rf /tmp/WhiteSur-gtk /tmp/WhiteSur-gtk-theme-master
+fi
+echo "[theme] GTK WhiteSur: OK"
+
+# ── Icon Theme: WhiteSur ──────────────────────────────────────────────────────
+install -d /usr/share/icons
+if [ ! -d /usr/share/icons/WhiteSur ]; then
+    echo "[theme] Download WhiteSur icon theme..."
+    git clone --depth=1 \
+        https://github.com/vinceliuice/WhiteSur-icon-theme.git \
+        /tmp/WhiteSur-icons \
+    && bash /tmp/WhiteSur-icons/install.sh \
+        --dest /usr/share/icons \
+        2>/dev/null \
+    || { curl -sL https://github.com/vinceliuice/WhiteSur-icon-theme/archive/refs/heads/master.zip \
+             -o /tmp/whitesur-icons.zip \
+         && unzip -q /tmp/whitesur-icons.zip -d /tmp/ \
+         && bash /tmp/WhiteSur-icon-theme-master/install.sh \
+                --dest /usr/share/icons 2>/dev/null \
+         && rm -f /tmp/whitesur-icons.zip; }
+    rm -rf /tmp/WhiteSur-icons /tmp/WhiteSur-icon-theme-master
+fi
+gtk-update-icon-cache -f /usr/share/icons/WhiteSur/ 2>/dev/null || true
+echo "[theme] Icone WhiteSur: OK"
+
+# ── Cursori: WhiteSur ─────────────────────────────────────────────────────────
+install -d /usr/share/icons
+if [ ! -d /usr/share/icons/WhiteSur-cursors ]; then
+    echo "[theme] Download WhiteSur cursors..."
+    git clone --depth=1 \
+        https://github.com/vinceliuice/WhiteSur-cursors.git \
+        /tmp/WhiteSur-cursors \
+    && cp -r /tmp/WhiteSur-cursors/dist/WhiteSur-cursors /usr/share/icons/ \
+    || { curl -sL https://github.com/vinceliuice/WhiteSur-cursors/archive/refs/heads/master.zip \
+             -o /tmp/whitesur-cursors.zip \
+         && unzip -q /tmp/whitesur-cursors.zip -d /tmp/ \
+         && cp -r /tmp/WhiteSur-cursors-master/dist/WhiteSur-cursors /usr/share/icons/ \
+         && rm -f /tmp/whitesur-cursors.zip; }
+    rm -rf /tmp/WhiteSur-cursors /tmp/WhiteSur-cursors-master
+fi
+gtk-update-icon-cache -f /usr/share/icons/WhiteSur-cursors/ 2>/dev/null || true
+echo "[theme] Cursori WhiteSur: OK"
+
+# ── Permessi ──────────────────────────────────────────────────────────────────
+chmod -R a+rX /usr/share/themes/WhiteSur*  2>/dev/null || true
+chmod -R a+rX /usr/share/icons/WhiteSur*   2>/dev/null || true
+
+echo "=== [AuraOS] Tema WhiteSur installato ==="

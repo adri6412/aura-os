@@ -1,0 +1,3 @@
+#!/bin/bash
+# Launcher ScamShield — protezione anti-truffa per anziani
+exec python3 /opt/scamshield/main.py "$@"

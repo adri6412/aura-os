@@ -1,0 +1,3 @@
+#!/bin/bash
+# Launcher Promemoria Farmaci
+exec python3 /opt/med-reminder/med_reminder.py "$@"

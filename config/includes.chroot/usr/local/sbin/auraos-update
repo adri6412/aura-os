@@ -1,0 +1,59 @@
+#!/bin/bash
+# auraos-update — aggiorna il root reale di AuraOS (il lower layer read-only).
+# Le modifiche diventano il nuovo lower layer al prossimo riavvio.
+# Richiede root.
+
+set -e
+
+[[ $EUID -ne 0 ]] && { echo "Errore: eseguire come root (sudo auraos-update)." >&2; exit 1; }
+
+LOWER="/run/aura-lower"
+
+# Se l'overlay non è attivo (boot normale o recovery), usa apt direttamente
+if [ ! -d "$LOWER/usr" ]; then
+    echo "[AuraOS] Overlay non attivo — aggiornamento diretto."
+    apt-get update
+    apt-get upgrade -y
+    exit $?
+fi
+
+echo "[AuraOS] ========================================"
+echo "[AuraOS]  Aggiornamento sistema AuraOS"
+echo "[AuraOS] ========================================"
+echo "[AuraOS]  Root reale: $LOWER (read-only → rw temporaneo)"
+echo "[AuraOS]  Le modifiche saranno attive al prossimo riavvio."
+echo ""
+
+# Sblocca il root reale
+echo "[AuraOS] Sblocco root reale..."
+mount -o remount,rw "$LOWER"
+echo "[AuraOS] Root sbloccato."
+
+cleanup() {
+    echo ""
+    echo "[AuraOS] Blocco root reale (immutabile)..."
+    sync
+    mount -o remount,ro "$LOWER" 2>/dev/null || true
+    echo "[AuraOS] Root bloccato."
+}
+trap cleanup EXIT
+
+# Aggiorna il database pacchetti nel chroot del lower
+echo "[AuraOS] Aggiornamento database pacchetti..."
+chroot "$LOWER" apt-get update -qq
+
+# Mostra i pacchetti che verranno aggiornati
+UPGRADABLE=$(chroot "$LOWER" apt-get upgrade --dry-run 2>/dev/null | grep "^Inst" | wc -l)
+if [ "$UPGRADABLE" -eq 0 ]; then
+    echo "[AuraOS] Nessun aggiornamento disponibile. Sistema aggiornato."
+    exit 0
+fi
+
+echo "[AuraOS] $UPGRADABLE pacchett$([ "$UPGRADABLE" -eq 1 ] && echo 'o' || echo 'i') da aggiornare."
+chroot "$LOWER" apt-get upgrade -y
+
+echo ""
+echo "[AuraOS] ========================================"
+echo "[AuraOS]  Aggiornamento completato."
+echo "[AuraOS]  Riavvia per applicare le modifiche."
+echo "[AuraOS] ========================================"

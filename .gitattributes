@@ -1,0 +1,9 @@
+# Forza LF per tutti i file di testo (necessario per script bash/shell su Linux)
+* text=auto eol=lf
+
+# File binari espliciti
+*.png binary
+*.iso binary
+*.deb binary
+*.tar.gz binary
+*.zip binary

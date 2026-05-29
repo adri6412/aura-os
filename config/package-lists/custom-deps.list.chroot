@@ -1,0 +1,65 @@
+# Dipendenze Python per ScamShield e strumenti custom
+python3
+python3-pip
+python3-psutil
+python3-requests
+# python3-pyside6 non è nei repo standard — installato via pip nel hook
+python3-gi
+python3-gi-cairo
+gir1.2-gtk-4.0
+gir1.2-adw-1
+gir1.2-notify-0.7
+gir1.2-wnck-3.0
+# python3-levenshtein → nome Debian è python3-levenshtein (minuscolo)
+python3-levenshtein
+# python3-pynput è nei repo standard
+python3-pynput
+# python3-schedule e python3-playsound → solo pip (nel hook)
+# python3-pyside6 → solo pip (nel hook)
+
+# AppIndicator — tray nativo GNOME top-bar (X11 + Wayland)
+gir1.2-ayatanaappindicator3-0.1
+libayatana-appindicator3-1
+# Estensione GNOME che mostra le icone AppIndicator nella top-bar
+gnome-shell-extension-appindicator
+
+# AT-SPI — rilevamento finestra attiva su Wayland
+gir1.2-atspi-2.0
+
+# Qt6 runtime (necessario per PySide6 da pip)
+libqt6core6t64
+libqt6gui6
+libqt6widgets6
+libqt6dbus6
+python3-dev
+build-essential
+
+# Calamares installer (graphical)
+calamares
+calamares-settings-debian
+
+# Utility installazione
+os-prober
+grub-efi-amd64
+grub-pc-bin
+shim-signed
+
+# Plymouth boot splash
+plymouth
+plymouth-themes
+plymouth-label
+
+# PIL per generazione logo Plymouth nel hook
+python3-pil
+
+# RustDesk — installato via 0036-rustdesk.hook.chroot (non nei repo Debian)
+# Dipendenze runtime richieste da RustDesk su X11
+libgtk-3-0
+libxdo3
+libxfixes3
+
+# rsync — usato da Backup Sicuro per copie incrementali
+rsync
+
+# GdkPixbuf — thumbnail foto (solitamente già presente con GTK4)
+gir1.2-gdkpixbuf-2.0

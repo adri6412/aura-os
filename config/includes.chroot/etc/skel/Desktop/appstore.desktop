@@ -1,0 +1,17 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=App Store
+Name[it]=App Store
+Name[en]=App Store
+GenericName=Installa Applicazioni
+GenericName[it]=Installa Applicazioni
+GenericName[en]=Install Applications
+Comment=Scopri e installa nuove applicazioni
+Comment[it]=Scopri e installa nuove applicazioni
+Comment[en]=Discover and install new applications
+Exec=gnome-software
+Icon=org.gnome.Software
+Terminal=false
+Categories=System;PackageManager;
+StartupNotify=true

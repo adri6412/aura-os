@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AuraOS — Configurazione Disco</title>
+<style>
+  :root {
+    --blue:     #2E6FD9;
+    --blue-lt:  #7EB8F7;
+    --blue-dk:  #1248A8;
+    --gray:     #F2F4F7;
+    --gray-dk:  #D1D9E6;
+    --text:     #1A1A2E;
+    --text-lt:  #5A6070;
+    --efi-col:  #A8C7FA;
+    --root-col: #2E6FD9;
+    --data-col: #34C759;
+    --swap-col: #FF9500;
+    --warn-col: #FF6B35;
+    --ok-col:   #34C759;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background: #FAFBFC;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Header ─────────────────────────────────────── */
+  header {
+    background: linear-gradient(135deg, var(--blue-dk) 0%, var(--blue) 60%, var(--blue-lt) 100%);
+    color: white;
+    padding: 22px 32px 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .logo-circle {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; font-weight: 200; flex-shrink: 0;
+    border: 1.5px solid rgba(255,255,255,0.35);
+  }
+  header h1 { font-size: 20px; font-weight: 300; letter-spacing: -0.3px; }
+  header p  { font-size: 12px; opacity: .75; margin-top: 2px; }
+
+  /* ── Layout ─────────────────────────────────────── */
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 24px 24px 40px;
+  }
+
+  /* ── Cards ─────────────────────────────────────── */
+  .card {
+    background: white;
+    border-radius: 14px;
+    border: 1px solid var(--gray-dk);
+    padding: 22px 24px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  }
+  .card-title {
+    font-size: 15px; font-weight: 600;
+    color: var(--blue-dk);
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--blue); color: white;
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* ── Callout ─────────────────────────────────────── */
+  .callout {
+    border-radius: 10px; padding: 13px 16px;
+    margin-bottom: 14px; font-size: 13px;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .callout.warn  { background: #FFF4EC; border-left: 3px solid var(--warn-col); }
+  .callout.info  { background: #EEF4FF; border-left: 3px solid var(--blue); }
+  .callout.ok    { background: #EEFBF2; border-left: 3px solid var(--ok-col); }
+  .callout .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .callout strong { display: block; margin-bottom: 3px; }
+
+  /* ── Disk input ─────────────────────────────────── */
+  .disk-input-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .disk-input-row label { font-weight: 500; white-space: nowrap; }
+  .disk-input-row input[type=range] {
+    flex: 1; min-width: 200px; accent-color: var(--blue);
+  }
+  .disk-size-badge {
+    background: var(--blue); color: white;
+    border-radius: 20px; padding: 4px 14px;
+    font-weight: 600; font-size: 15px; min-width: 80px;
+    text-align: center;
+  }
+
+  /* ── Diagram ─────────────────────────────────────── */
+  .diagram-wrap {
+    margin: 4px 0 20px;
+  }
+  .disk-bar {
+    display: flex; height: 44px; border-radius: 8px;
+    overflow: hidden; border: 1.5px solid var(--gray-dk);
+    box-shadow: 0 2px 6px rgba(0,0,0,.06);
+  }
+  .seg {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: white;
+    overflow: hidden; white-space: nowrap;
+    transition: width .4s cubic-bezier(.4,0,.2,1);
+    text-shadow: 0 1px 2px rgba(0,0,0,.25);
+    min-width: 0;
+  }
+  .seg.efi  { background: var(--efi-col);  color: #1A1A2E; }
+  .seg.root { background: var(--root-col); }
+  .seg.data { background: var(--data-col); }
+  .seg.swap { background: var(--swap-col); }
+
+  .disk-legend {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-lt);
+  }
+  .legend-dot {
+    width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
+  }
+  .legend-item strong { color: var(--text); }
+
+  /* ── Partition table ─────────────────────────────── */
+  .part-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px; margin-top: 4px;
+  }
+  .part-table th {
+    text-align: left; font-weight: 600; font-size: 11px;
+    color: var(--text-lt); text-transform: uppercase;
+    letter-spacing: .5px; padding: 0 8px 8px;
+    border-bottom: 1px solid var(--gray-dk);
+  }
+  .part-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--gray);
+    vertical-align: top;
+  }
+  .part-table tr:last-child td { border-bottom: none; }
+  .part-dot {
+    display: inline-block; width: 10px; height: 10px;
+    border-radius: 3px; margin-right: 6px; vertical-align: middle;
+  }
+  .part-name { font-weight: 600; }
+  .part-note { font-size: 11px; color: var(--text-lt); margin-top: 2px; }
+  .badge {
+    display: inline-block; border-radius: 6px;
+    padding: 2px 8px; font-size: 11px; font-weight: 600;
+  }
+  .badge.ext4  { background: #EEF4FF; color: var(--blue-dk); }
+  .badge.fat32 { background: #FFF4EC; color: #C06000; }
+  .badge.swap  { background: #FFF8EC; color: #A06000; }
+  .badge.none  { background: var(--gray); color: var(--text-lt); }
+
+  /* ── Steps ─────────────────────────────────────── */
+  .steps { display: flex; flex-direction: column; gap: 12px; }
+  .step {
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--gray); border: 2px solid var(--gray-dk);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: var(--blue-dk);
+    flex-shrink: 0; margin-top: 2px;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { display: block; margin-bottom: 3px; }
+  .step-body code {
+    background: var(--gray); border-radius: 4px;
+    padding: 1px 6px; font-size: 12px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    color: var(--blue-dk);
+  }
+
+  /* ── Mode tabs ─────────────────────────────────── */
+  .tabs {
+    display: flex; gap: 0; margin-bottom: 16px;
+    border: 1.5px solid var(--gray-dk); border-radius: 10px;
+    overflow: hidden;
+  }
+  .tab {
+    flex: 1; padding: 10px 16px; text-align: center;
+    cursor: pointer; font-size: 13px; font-weight: 500;
+    background: white; color: var(--text-lt);
+    border: none; outline: none;
+    transition: background .15s, color .15s;
+  }
+  .tab.active { background: var(--blue); color: white; }
+  .tab:first-child { border-radius: 8px 0 0 8px; }
+  .tab:last-child  { border-radius: 0 8px 8px 0; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Bottom bar ─────────────────────────────────── */
+  .bottom-note {
+    text-align: center; font-size: 12px; color: var(--text-lt);
+    margin-top: 8px; padding: 0 16px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-circle">a</div>
+  <div>
+    <h1>AuraOS — Configurazione Disco</h1>
+    <p>Leggi questa guida prima di procedere alla partizione manuale</p>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Spiegazione ─────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title"><span class="num">i</span> Come funziona il disco in AuraOS</div>
+
+    <div class="callout ok">
+      <span class="icon">🔒</span>
+      <div>
+        <strong>Sistema immutabile</strong>
+        AuraOS monta il sistema base in <em>sola lettura</em>. Le modifiche vengono scritte
+        su un secondo layer sovrapposto (OverlayFS). Questo protegge il sistema da
+        corruzione e permette un reset immediato.
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="setMode('recommended')">
+        ✅ Consigliato — 2 partizioni
+      </button>
+      <button class="tab" onclick="setMode('minimal')">
+        ⚠️ Minimo — 1 partizione
+      </button>
+    </div>
+
+    <div id="panel-recommended" class="tab-panel active">
+      <div class="callout ok">
+        <span class="icon">✅</span>
+        <div>
+          <strong>Modifiche persistenti tra i riavvii</strong>
+          Con una partizione dati separata, tutto ciò che installi o configuri
+          rimane al riavvio successivo. Il sistema base resta protetto e immutabile.
+        </div>
+      </div>
+    </div>
+    <div id="panel-minimal" class="tab-panel">
+      <div class="callout warn">
+        <span class="icon">⚠️</span>
+        <div>
+          <strong>Modifiche perse ad ogni riavvio</strong>
+          Senza partizione dati, AuraOS usa la RAM come layer temporaneo.
+          Va bene per test e VM usa-e-getta, ma <strong>non per uso quotidiano</strong>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Calcolatore ─────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title"><span class="num">1</span> Calcola le dimensioni</div>
+
+    <div class="disk-input-row">
+      <label>Dimensione disco:</label>
+      <input type="range" id="diskSlider" min="32" max="2000" value="120"
+             oninput="update()">
+      <span class="disk-size-badge" id="diskLabel">120 GB</span>
+    </div>
+
+    <div class="diagram-wrap">
+      <div class="disk-bar" id="diskBar">
+        <div class="seg efi"  id="segEfi">EFI</div>
+        <div class="seg root" id="segRoot">/ (Root)</div>
+        <div class="seg data" id="segData">Dati</div>
+        <div class="seg swap" id="segSwap" style="display:none">Swap</div>
+      </div>
+      <div class="disk-legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--efi-col)"></div>
+          EFI — <strong id="lblEfi">512 MB</strong>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--root-col)"></div>
+          Root — <strong id="lblRoot">20 GB</strong>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--data-col)"></div>
+          Dati — <strong id="lblData">99 GB</strong>
+        </div>
+        <div class="legend-item" id="swapLegend" style="display:none">
+          <div class="legend-dot" style="background:var(--swap-col)"></div>
+          Swap — <strong id="lblSwap">4 GB</strong>
+        </div>
+      </div>
+    </div>
+
+    <table class="part-table" id="partTable">
+      <tr>
+        <th>Partizione</th>
+        <th>Tipo</th>
+        <th>Punto di mount</th>
+        <th>Dimensione</th>
+        <th>Note</th>
+      </tr>
+      <tr>
+        <td>
+          <span class="part-dot" style="background:var(--efi-col)"></span>
+          <span class="part-name">EFI</span>
+          <div class="part-note">Solo sistemi UEFI</div>
+        </td>
+        <td><span class="badge fat32">FAT32</span></td>
+        <td><code>/boot/efi</code></td>
+        <td><strong>512 MB</strong></td>
+        <td class="part-note">Bootloader GRUB</td>
+      </tr>
+      <tr>
+        <td>
+          <span class="part-dot" style="background:var(--root-col)"></span>
+          <span class="part-name">Root</span>
+          <div class="part-note">Sistema base (immutabile)</div>
+        </td>
+        <td><span class="badge ext4">ext4</span></td>
+        <td><code>/</code></td>
+        <td><strong id="cellRoot">20 GB</strong></td>
+        <td class="part-note">Min 15 GB consigliato 20 GB</td>
+      </tr>
+      <tr id="rowData">
+        <td>
+          <span class="part-dot" style="background:var(--data-col)"></span>
+          <span class="part-name">Dati</span>
+          <div class="part-note">Layer modifiche + home</div>
+        </td>
+        <td><span class="badge ext4">ext4</span></td>
+        <td>
+          <span class="badge none">nessuno</span>
+          <div class="part-note">Lasciare vuoto</div>
+        </td>
+        <td><strong id="cellData">—</strong></td>
+        <td>
+          <div class="part-note">
+            Label: <code>auraos-data</code><br>
+            AuraOS la trova automaticamente
+          </div>
+        </td>
+      </tr>
+      <tr id="rowSwap" style="display:none">
+        <td>
+          <span class="part-dot" style="background:var(--swap-col)"></span>
+          <span class="part-name">Swap</span>
+        </td>
+        <td><span class="badge swap">linuxswap</span></td>
+        <td><span class="badge none">nessuno</span></td>
+        <td><strong id="cellSwap">—</strong></td>
+        <td class="part-note">Opzionale, utile con poca RAM</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ── Istruzioni Calamares ───────────────────────────────── -->
+  <div class="card">
+    <div class="card-title"><span class="num">2</span> Come creare le partizioni in Calamares</div>
+
+    <div class="callout info">
+      <span class="icon">💡</span>
+      <div>
+        Nella schermata successiva scegli <strong>"Partizione manuale"</strong> e crea
+        le partizioni nell'ordine seguente.
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Crea la partizione EFI (solo UEFI)</strong>
+          Dimensione: <code>512 MB</code> — Tipo: <code>FAT32</code> — Mount: <code>/boot/efi</code>
+          — Flag: <code>boot</code>, <code>esp</code>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Crea la partizione Root</strong>
+          Dimensione: <code id="stepRootSize">20 GB</code> — Tipo: <code>ext4</code>
+          — Mount: <code>/</code>
+        </div>
+      </div>
+      <div class="step" id="stepDataRow">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Crea la partizione Dati (consigliata)</strong>
+          Dimensione: <code id="stepDataSize">spazio rimanente</code> — Tipo: <code>ext4</code><br>
+          Mount: <strong>lascia vuoto</strong> — Label: <code>auraos-data</code><br>
+          <div class="part-note" style="margin-top:4px">
+            AuraOS la rileva automaticamente tramite questa label e la usa
+            come layer persistente dell'overlay.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Bottone Avanti ─────────────────────────────────────── -->
+  <div style="text-align:center; margin-top:8px; padding-bottom:8px;">
+    <button onclick="proceed()" style="
+      background: linear-gradient(135deg, #2E6FD9, #1248A8);
+      color: white; border: none; border-radius: 12px;
+      padding: 14px 48px; font-size: 16px; font-weight: 500;
+      cursor: pointer; box-shadow: 0 4px 16px rgba(46,111,217,.35);
+      font-family: inherit; letter-spacing: -0.2px;
+      transition: opacity .15s;
+    " onmouseover="this.style.opacity='.85'"
+       onmouseout="this.style.opacity='1'">
+      Ho capito — Avvia l'installer &nbsp;→
+    </button>
+    <div style="margin-top:10px; font-size:12px; color:#8090A8;">
+      Potrai scegliere la partizione manuale nella schermata successiva
+    </div>
+  </div>
+
+</main>
+
+<script>
+  function fmt(gb) {
+    if (gb < 1) return Math.round(gb * 1024) + ' MB';
+    return gb % 1 === 0 ? gb + ' GB' : gb.toFixed(1) + ' GB';
+  }
+
+  function update() {
+    const total = parseInt(document.getElementById('diskSlider').value);
+    document.getElementById('diskLabel').textContent = total + ' GB';
+
+    // Layout logic
+    const efiGB   = 0.5;
+    const rootGB  = total >= 100 ? 25 : total >= 60 ? 20 : 15;
+    const swapGB  = total >= 64 ? 0 : 0;   // skip swap: modern systems use zram
+    const dataGB  = Math.max(0, total - efiGB - rootGB - swapGB);
+    const hasData = dataGB >= 5;
+    const hasSwap = swapGB > 0;
+
+    // Widths (%)
+    const pEfi  = efiGB   / total * 100;
+    const pRoot = rootGB  / total * 100;
+    const pData = dataGB  / total * 100;
+    const pSwap = swapGB  / total * 100;
+
+    document.getElementById('segEfi').style.width   = pEfi  + '%';
+    document.getElementById('segRoot').style.width  = pRoot + '%';
+    document.getElementById('segData').style.width  = (hasData ? pData : 0) + '%';
+    document.getElementById('segSwap').style.width  = (hasSwap ? pSwap : 0) + '%';
+    document.getElementById('segData').style.display = hasData ? '' : 'none';
+    document.getElementById('segSwap').style.display = hasSwap ? '' : 'none';
+
+    // Labels
+    document.getElementById('lblEfi').textContent  = fmt(efiGB);
+    document.getElementById('lblRoot').textContent = fmt(rootGB);
+    document.getElementById('lblData').textContent = fmt(dataGB);
+    document.getElementById('lblSwap').textContent = fmt(swapGB);
+    document.getElementById('cellRoot').textContent = fmt(rootGB);
+    document.getElementById('cellData').textContent = hasData ? fmt(dataGB) : '—';
+    document.getElementById('cellSwap').textContent = hasSwap ? fmt(swapGB) : '—';
+    document.getElementById('stepRootSize').textContent = fmt(rootGB);
+    document.getElementById('stepDataSize').textContent = hasData ? fmt(dataGB) : 'spazio rimanente';
+
+    document.getElementById('rowData').style.display   = hasData ? '' : 'none';
+    document.getElementById('stepDataRow').style.display = hasData ? '' : 'none';
+    document.getElementById('rowSwap').style.display   = hasSwap ? '' : 'none';
+    document.getElementById('swapLegend').style.display = hasSwap ? '' : 'none';
+  }
+
+  function proceed() {
+    // Chiude Vivaldi (aperto in --app mode dalla kiosk session)
+    // → il kiosk script rileva l'uscita e avvia Calamares
+    window.close();
+  }
+
+  function setMode(mode) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', (i === 0 && mode === 'recommended') || (i === 1 && mode === 'minimal'));
+    });
+    document.getElementById('panel-recommended').classList.toggle('active', mode === 'recommended');
+    document.getElementById('panel-minimal').classList.toggle('active', mode === 'minimal');
+  }
+
+  update();
+</script>
+</body>
+</html>

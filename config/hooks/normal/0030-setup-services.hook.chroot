@@ -1,0 +1,129 @@
+#!/bin/bash
+# Hook: configura GDM, servizi e branding — AuraOS
+
+set -e
+
+echo "=== [AuraOS] Configurazione servizi ==="
+
+# --- GDM: auto-login utente live + X11 forzato ---
+# AutomaticLogin=user  → live-config crea l'utente "user" a runtime;
+#                        GDM lo logga automaticamente sulla sessione kiosk.
+# WaylandEnable=false  → pkexec (usato da Calamares) non mostra finestre
+#                        su Wayland → schermo nero. X11 obbligatorio nel live.
+# Il cleanup post-install (auraos-cleanup.sh) rimuove AutomaticLogin* e
+# riabilita Wayland per il sistema installato.
+cat > /etc/gdm3/custom.conf <<'EOF'
+[daemon]
+AutomaticLoginEnable=true
+AutomaticLogin=user
+WaylandEnable=false
+
+[security]
+DisallowTCP=true
+
+[xdmcp]
+Enable=false
+
+[chooser]
+Multicast=false
+
+[debug]
+Enable=false
+EOF
+
+# --- Thunderbird: impostazioni predefinite ---
+THUNDERBIRD_POLICIES_DIR="/usr/lib/thunderbird/distribution"
+mkdir -p "$THUNDERBIRD_POLICIES_DIR"
+cat > "$THUNDERBIRD_POLICIES_DIR/policies.json" <<'EOF'
+{
+  "policies": {
+    "DisableTelemetry": true,
+    "BlockAboutConfig": false
+  }
+}
+EOF
+
+# --- Sudoers per azioni di sistema ---
+echo "user ALL=(ALL) NOPASSWD: /usr/sbin/ufw, /usr/bin/apt-get update, /usr/bin/apt-get upgrade, /usr/bin/calamares, /usr/sbin/update-locale" \
+    > /etc/sudoers.d/auraos
+chmod 440 /etc/sudoers.d/auraos
+
+# --- rkhunter scan settimanale ---
+sed -i 's/CRON_DAILY_RUN=""/CRON_DAILY_RUN="yes"/' /etc/default/rkhunter 2>/dev/null || true
+
+# --- GRUB: branding AuraOS ---
+cat > /etc/default/grub <<'EOF'
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="AuraOS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash ro"
+GRUB_CMDLINE_LINUX=""
+GRUB_GFXMODE=1024x768x32,auto
+GRUB_GFXPAYLOAD_LINUX=keep
+GRUB_BACKGROUND="/boot/grub/auraos-bg.png"
+EOF
+
+# --- Background GRUB 1024x768 (gradiente blu-viola stile macOS) ---
+python3 - <<'PYEOF'
+import struct, zlib
+
+def make_png(filename, width, height, top_color, bottom_color):
+    def lerp(a, b, t): return int(a + (b - a) * t)
+    def chunk(tag, data):
+        c = struct.pack('>I', len(data)) + tag + data
+        return c + struct.pack('>I', zlib.crc32(tag + data) & 0xffffffff)
+    rows = b''
+    for y in range(height):
+        t = y / (height - 1)
+        r = lerp(top_color[0], bottom_color[0], t)
+        g = lerp(top_color[1], bottom_color[1], t)
+        b = lerp(top_color[2], bottom_color[2], t)
+        rows += b'\x00' + bytes([r, g, b] * width)
+    header = b'\x89PNG\r\n\x1a\n'
+    ihdr = chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0))
+    idat = chunk(b'IDAT', zlib.compress(rows, 9))
+    iend = chunk(b'IEND', b'')
+    with open(filename, 'wb') as f:
+        f.write(header + ihdr + idat + iend)
+
+# Gradiente: azzurro cielo → viola notte (stile macOS)
+make_png('/boot/grub/auraos-bg.png', 1024, 768, (126, 184, 247), (46, 111, 217))
+print('[grub] auraos-bg.png generata')
+PYEOF
+
+chmod +x /lib/live/config/9999-auraos-mode 2>/dev/null || true
+chmod +x /usr/local/bin/calamares-kiosk.sh 2>/dev/null || true
+chmod +x /usr/local/lib/auraos-cleanup.sh 2>/dev/null || true
+
+mkdir -p /etc/systemd/system/multi-user.target.wants/
+ln -sf /etc/systemd/system/auraos-firstboot.service \
+    /etc/systemd/system/multi-user.target.wants/auraos-firstboot.service \
+    2>/dev/null || true
+
+# --- Flatpak: aggiungi Flathub ---
+if command -v flatpak &>/dev/null; then
+    flatpak remote-add --system --if-not-exists flathub \
+        https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+    echo "[flatpak] Remote Flathub aggiunto"
+fi
+
+# --- Abilita GDM e target grafico ---
+# Symlink diretti (systemctl enable non funziona in chroot senza systemd).
+mkdir -p /etc/systemd/system/graphical.target.wants
+ln -sf /lib/systemd/system/gdm3.service \
+    /etc/systemd/system/display-manager.service 2>/dev/null || true
+ln -sf /lib/systemd/system/gdm3.service \
+    /etc/systemd/system/graphical.target.wants/gdm3.service 2>/dev/null || true
+ln -sfn /lib/systemd/system/graphical.target \
+    /etc/systemd/system/default.target 2>/dev/null || true
+
+# /etc/X11/default-display-manager: live-config legge questo file
+# per sapere quale display manager avviare nella sessione live.
+# Senza questo file live-config non sa che deve avviare GDM.
+mkdir -p /etc/X11
+echo "/usr/sbin/gdm3" > /etc/X11/default-display-manager
+
+# Hook live-config per avvio GDM (deve essere eseguibile)
+chmod +x /lib/live/config/9998-start-gdm3 2>/dev/null || true
+
+echo "=== [AuraOS] Servizi configurati OK ==="

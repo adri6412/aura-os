@@ -1,0 +1,31 @@
+#!/bin/bash
+# auraos-reset — elimina l'upper layer overlay, riportando il sistema
+# allo stato del root base al prossimo riavvio.
+# ATTENZIONE: elimina tutte le modifiche di sistema (non tocca /home).
+
+[[ $EUID -ne 0 ]] && { echo "Errore: eseguire come root (sudo auraos-reset)." >&2; exit 1; }
+
+LOWER="/run/aura-lower"
+RW="/run/aura-rw"
+
+[ ! -d "$LOWER/usr" ] && { echo "[AuraOS] Overlay non attivo."; exit 1; }
+[ ! -f /run/aura-persistent ] && {
+    echo "[AuraOS] Overlay su tmpfs: si azzera automaticamente al riavvio."
+    exit 0
+}
+
+CONF="$LOWER/etc/auraos/overlay.conf"
+SUBDIR=".auraos-overlay"
+[ -f "$CONF" ] && SUBDIR=$(grep OVERLAY_SUBDIR "$CONF" | cut -d= -f2 | tr -d '"')
+
+echo "[AuraOS] ATTENZIONE: questa operazione eliminerà tutte le modifiche"
+echo "         di sistema accumulate nell'upper layer."
+echo "         I dati in /home NON vengono toccati."
+echo ""
+read -rp "Conferma (scrivi 'reset'): " answer
+[ "$answer" != "reset" ] && { echo "Annullato."; exit 0; }
+
+echo "[AuraOS] Pulizia upper layer..."
+rm -rf "$RW/$SUBDIR/upper" "$RW/$SUBDIR/work"
+mkdir -p "$RW/$SUBDIR/upper" "$RW/$SUBDIR/work"
+echo "[AuraOS] Upper layer azzerato. Riavvia per applicare."

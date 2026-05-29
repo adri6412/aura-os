@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AdGuard Home
+Name[it]=AdGuard Home
+Comment=Pannello di controllo filtro DNS anti-pubblicità e anti-malware
+Comment[it]=Pannello di controllo filtro DNS anti-pubblicità e anti-malware
+Exec=xdg-open http://localhost:3000
+Icon=security-high
+Terminal=false
+Categories=Network;Security;
+Keywords=dns;adblock;filtro;pubblicità;malware;sicurezza;
+StartupNotify=false

@@ -1,0 +1,88 @@
+#!/bin/bash
+# Hook: installa e attiva il tema Plymouth AuraOS
+
+set -e
+
+echo "=== [AuraOS] Configurazione tema Plymouth ==="
+
+THEME_DIR="/usr/share/plymouth/themes/auraos"
+mkdir -p "$THEME_DIR"
+
+python3 - <<'PYEOF'
+import os, math
+from PIL import Image, ImageDraw, ImageFont
+
+THEME = "/usr/share/plymouth/themes/auraos"
+
+def find_font(bold=False):
+    candidates_bold = [
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+    ]
+    candidates_reg = [
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+    ]
+    pool = candidates_bold if bold else candidates_reg
+    for p in pool:
+        if os.path.exists(p):
+            return p
+    return None
+
+# ── logo.png — cerchio gradiente + lettera "a" stile macOS ──────────────────
+W, H = 500, 300
+img  = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+draw = ImageDraw.Draw(img)
+
+# Cerchio sfumato (approssimazione con dischi concentrici)
+cx, cy = W // 2, 120
+for r in range(78, 0, -1):
+    t = 1.0 - r / 78.0
+    rc = int(126 + (30  - 126) * t)
+    gc = int(184 + (111 - 184) * t)
+    bc = int(247 + (200 - 247) * t)
+    draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=(rc, gc, bc, 240))
+
+# Lettera "a"
+font_path_r = find_font(bold=False)
+font_a = ImageFont.truetype(font_path_r, 80) if font_path_r else ImageFont.load_default()
+draw.text((cx, cy + 12), "a", font=font_a, fill=(255, 255, 255, 255), anchor="mm")
+
+# Testo
+font_path_b = find_font(bold=True)
+font_title = ImageFont.truetype(font_path_b, 38) if font_path_b else ImageFont.load_default()
+font_sub   = ImageFont.truetype(font_path_r, 18) if font_path_r else ImageFont.load_default()
+draw.text((W//2, 232), "AuraOS",                 font=font_title, fill=(255, 255, 255, 240), anchor="mm")
+draw.text((W//2, 268), "Fast, clean, and secure", font=font_sub,   fill=(160, 210, 255, 180), anchor="mm")
+
+img.save(os.path.join(THEME, "logo.png"), "PNG")
+print("[plymouth] logo.png creata")
+
+bar_fg = Image.new("RGBA", (2, 2), (255, 255, 255, 230))
+bar_fg.save(os.path.join(THEME, "bar_fg.png"), "PNG")
+
+bar_bg = Image.new("RGBA", (2, 2), (46, 111, 217, 160))
+bar_bg.save(os.path.join(THEME, "bar_bg.png"), "PNG")
+
+print("[plymouth] bar_fg.png e bar_bg.png create")
+PYEOF
+
+if command -v update-alternatives &>/dev/null; then
+    update-alternatives --install \
+        /usr/share/plymouth/themes/default.plymouth default.plymouth \
+        "$THEME_DIR/auraos.plymouth" 200 2>/dev/null || true
+fi
+
+if command -v plymouth-set-default-theme &>/dev/null; then
+    plymouth-set-default-theme auraos
+    echo "[plymouth] Tema 'auraos' impostato come default"
+    update-initramfs -u -k all 2>/dev/null || update-initramfs -u 2>/dev/null || true
+else
+    echo "[plymouth] ATTENZIONE: plymouth-set-default-theme non trovato, skip"
+fi
+
+echo "=== [AuraOS] Tema Plymouth OK ==="

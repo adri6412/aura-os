@@ -1,0 +1,11 @@
+#!/bin/bash
+# Hook: corregge i permessi dei file che Windows non preserva
+
+set -e
+
+chmod +x /lib/live/config/9998-start-gdm3         2>/dev/null || true
+chmod +x /lib/live/config/9999-auraos-mode         2>/dev/null || true
+chmod +x /usr/local/bin/calamares-kiosk-session    2>/dev/null || true
+chmod +x /usr/local/lib/auraos-cleanup.sh          2>/dev/null || true
+chmod +x /etc/initramfs-tools/scripts/init-bottom/auraos-overlayfs 2>/dev/null || true
+chmod +x /etc/initramfs-tools/hooks/auraos-tools   2>/dev/null || true

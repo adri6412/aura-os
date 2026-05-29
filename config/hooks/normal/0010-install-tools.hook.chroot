@@ -1,0 +1,44 @@
+#!/bin/bash
+# Hook: configurazione base sistema AuraOS
+
+set -e
+
+echo "=== [AuraOS] Configurazione sistema ==="
+
+# --- Rendi eseguibili eventuali script custom in /opt ---
+find /opt -name "*.py" -exec chmod +x {} \; 2>/dev/null || true
+find /opt -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+
+# --- Profilo dconf utente ---
+if command -v dconf &>/dev/null; then
+    dconf update 2>/dev/null || true
+fi
+
+if [ ! -f /etc/dconf/profile/user ]; then
+    mkdir -p /etc/dconf/profile
+    cat > /etc/dconf/profile/user <<'PROFILE'
+user-db:user
+system-db:local
+PROFILE
+fi
+dconf update 2>/dev/null || true
+
+# --- Desktop entries ---
+update-desktop-database /usr/share/applications/ 2>/dev/null || true
+update-mime-database /usr/share/mime/ 2>/dev/null || true
+
+# --- Servizi di sicurezza ---
+systemctl enable clamav-daemon 2>/dev/null || true
+systemctl enable clamav-freshclam 2>/dev/null || true
+
+ufw default deny incoming
+ufw default allow outgoing
+ufw --force enable
+
+cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+EOF
+
+echo "=== [AuraOS] Configurazione sistema OK ==="

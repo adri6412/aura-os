@@ -1,0 +1,38 @@
+# Suite office e strumenti quotidiani
+libreoffice
+libreoffice-writer
+libreoffice-calc
+libreoffice-impress
+libreoffice-draw
+libreoffice-l10n-it
+libreoffice-help-it
+libreoffice-style-colibre
+libreoffice-gtk3
+
+# Email
+thunderbird
+thunderbird-l10n-it
+
+# Browser — Vivaldi installato via hook 0035-vivaldi.hook.chroot
+
+# Visualizzatori documenti
+evince
+okular
+
+# Multimedia
+vlc
+ffmpeg
+
+# Compressione
+file-roller
+unzip
+p7zip-full
+
+# Utility desktop
+cheese
+simple-scan
+baobab
+
+# Gestione password (semplice)
+seahorse
+gnome-keyring

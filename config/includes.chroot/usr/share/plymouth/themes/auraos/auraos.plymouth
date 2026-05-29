@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=AuraOS
+Description=AuraOS - Fast, clean, and secure Linux
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/auraos
+ScriptFile=/usr/share/plymouth/themes/auraos/auraos.script

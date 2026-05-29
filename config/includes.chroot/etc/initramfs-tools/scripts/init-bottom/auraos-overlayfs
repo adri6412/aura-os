@@ -1,0 +1,108 @@
+#!/bin/sh
+# AuraOS — OverlayFS immutable root (persistent upper layer)
+#
+# Architettura:
+#   lower  = partizione root ext4, montata read-only (sistema base immutabile)
+#   upper  = partizione dati ext4 su disco, persistente tra i riavvii
+#   merged = ciò che l'utente vede e usa (scrivibile, modifiche su disco)
+#
+# La partizione dati viene identificata dall'UUID salvato in
+# /etc/auraos/overlay.conf durante l'installazione.
+# Se il file non esiste (live, recovery), si usa un tmpfs come fallback.
+#
+# Disable: aggiungere "auraos.ro=0" al cmdline di GRUB.
+
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+
+. /scripts/functions
+
+# Sessione live: live-boot gestisce il proprio overlay
+grep -q "boot=live" /proc/cmdline 2>/dev/null && exit 0
+
+# Escape hatch per debug/recovery
+grep -q "auraos\.ro=0" /proc/cmdline 2>/dev/null && exit 0
+
+log_begin_msg "AuraOS: OverlayFS immutable root"
+
+LOWER="/run/aura-lower"
+RW="/run/aura-rw"
+mkdir -p "$LOWER" "$RW"
+
+# ── 1. Remonta il root reale read-only ────────────────────────────────────────
+mount -o remount,ro "${rootmnt}" 2>/dev/null || {
+    log_warning_msg "AuraOS: cannot remount root ro, skipping overlay"
+    exit 0
+}
+
+# ── 2. Sposta il root fuori da rootmnt ────────────────────────────────────────
+mount --move "${rootmnt}" "$LOWER" 2>/dev/null || {
+    mount -o remount,rw "${rootmnt}"
+    log_warning_msg "AuraOS: cannot move root, skipping overlay"
+    exit 0
+}
+
+# ── 3. Trova la partizione dati persistente ───────────────────────────────────
+# Legge /etc/auraos/overlay.conf dal root (ora in $LOWER)
+OVERLAY_UUID=""
+OVERLAY_SUBDIR=".auraos-overlay"
+PERSISTENT=false
+
+CONF="$LOWER/etc/auraos/overlay.conf"
+if [ -f "$CONF" ]; then
+    # source sicuro: solo righe OVERLAY_*=
+    while IFS='=' read -r key val; do
+        case "$key" in
+            OVERLAY_UUID)   OVERLAY_UUID=$(echo "$val" | tr -d '"') ;;
+            OVERLAY_SUBDIR) OVERLAY_SUBDIR=$(echo "$val" | tr -d '"') ;;
+        esac
+    done < "$CONF"
+fi
+
+if [ -n "$OVERLAY_UUID" ]; then
+    DATA_DEV=$(blkid -U "$OVERLAY_UUID" 2>/dev/null || true)
+    if [ -n "$DATA_DEV" ] && mount -t ext4 -o rw "$DATA_DEV" "$RW" 2>/dev/null; then
+        # Crea la struttura overlay sulla partizione dati se non esiste
+        mkdir -p "$RW/$OVERLAY_SUBDIR/upper" "$RW/$OVERLAY_SUBDIR/work"
+        PERSISTENT=true
+        log_begin_msg "AuraOS: persistent overlay on $DATA_DEV"
+    fi
+fi
+
+# ── 4. Fallback tmpfs se nessuna partizione dati trovata ──────────────────────
+if ! $PERSISTENT; then
+    mount -t tmpfs -o size=50%,mode=0755 aura-rw "$RW" 2>/dev/null || {
+        mount --move "$LOWER" "${rootmnt}"
+        mount -o remount,rw "${rootmnt}"
+        log_warning_msg "AuraOS: no data partition and no tmpfs, booting rw"
+        exit 0
+    }
+    mkdir -p "$RW/upper" "$RW/work"
+    OVERLAY_SUBDIR="."
+    log_warning_msg "AuraOS: no persistent data partition found, using tmpfs (changes lost on reboot)"
+fi
+
+UPPER="$RW/$OVERLAY_SUBDIR/upper"
+WORK="$RW/$OVERLAY_SUBDIR/work"
+
+# ── 5. Monta l'overlay a rootmnt ──────────────────────────────────────────────
+if mount -t overlay overlay \
+       -o "lowerdir=$LOWER,upperdir=$UPPER,workdir=$WORK" \
+       "${rootmnt}" 2>/dev/null; then
+
+    # Sposta lower e rw DENTRO il nuovo root (accessibili da userspace)
+    mkdir -p "${rootmnt}/run/aura-lower" "${rootmnt}/run/aura-rw"
+    mount --move "$LOWER" "${rootmnt}/run/aura-lower"
+    mount --move "$RW"    "${rootmnt}/run/aura-rw"
+
+    # Flag leggibile da userspace per sapere se l'overlay è persistente
+    $PERSISTENT && touch "${rootmnt}/run/aura-persistent"
+
+    log_end_msg 0
+else
+    umount "$RW" 2>/dev/null || true
+    mount --move "$LOWER" "${rootmnt}"
+    mount -o remount,rw "${rootmnt}"
+    log_warning_msg "AuraOS: overlay mount failed, booting rw"
+fi

@@ -1,0 +1,53 @@
+# AuraOS Plymouth Theme
+
+# Sfondo: azzurro cielo -> blu notte (stile macOS)
+Window.SetBackgroundTopColor(0.494, 0.722, 0.969);
+Window.SetBackgroundBottomColor(0.180, 0.435, 0.851);
+
+# --- Logo centrato ---
+logo.image  = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.sprite.SetX(Window.GetWidth()  / 2 - logo.image.GetWidth()  / 2);
+logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2 - 30);
+logo.sprite.SetZ(10);
+
+# --- Barra di progresso ---
+bar_width  = Window.GetWidth() * 0.45;
+bar_height = 5;
+bar_x      = Window.GetWidth()  / 2 - bar_width / 2;
+bar_y      = Window.GetHeight() * 0.80;
+
+progress_bg.image  = Image.Scale(Image("bar_bg.png"), bar_width, bar_height);
+progress_bg.sprite = Sprite(progress_bg.image);
+progress_bg.sprite.SetX(bar_x);
+progress_bg.sprite.SetY(bar_y);
+progress_bg.sprite.SetZ(9);
+
+progress_fg.image  = Image.Scale(Image("bar_fg.png"), 2, bar_height);
+progress_fg.sprite = Sprite(progress_fg.image);
+progress_fg.sprite.SetX(bar_x);
+progress_fg.sprite.SetY(bar_y);
+progress_fg.sprite.SetZ(10);
+
+fun boot_progress_callback(duration, progress)
+{
+    local.w = Math.Int(bar_width * progress);
+    if (local.w < 2) local.w = 2;
+    progress_fg.image = Image.Scale(Image("bar_fg.png"), local.w, bar_height);
+    progress_fg.sprite.SetImage(progress_fg.image);
+}
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+
+# Animazione fade-in iniziale del logo
+logo.opacity = 0.0;
+fun refresh_callback()
+{
+    local.t = Plymouth.GetTime();
+    if (local.t < 1.5)
+    {
+        logo.opacity = local.t / 1.5;
+        if (logo.opacity > 1.0) logo.opacity = 1.0;
+        logo.sprite.SetOpacity(logo.opacity);
+    }
+}
+Plymouth.SetRefreshFunction(refresh_callback);

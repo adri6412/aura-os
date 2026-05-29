@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=AuraOS Installer
+Comment=Sessione kiosk per l'installazione di AuraOS
+Exec=/usr/local/bin/calamares-kiosk-session
+TryExec=/usr/bin/openbox
+Type=Application
+DesktopNames=calamares-kiosk

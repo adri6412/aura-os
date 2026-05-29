@@ -1,0 +1,31 @@
+---
+componentName: auraos
+
+welcomeStyleCalamares: false
+welcomeExpandingLogo:   true
+
+strings:
+    productName:         "AuraOS"
+    shortProductName:    "AuraOS"
+    version:             "1.0"
+    shortVersion:        "1.0"
+    versionedName:       "AuraOS 1.0"
+    shortVersionedName:  "AuraOS 1.0"
+    bootloaderEntryName: "AuraOS"
+    productUrl:          ""
+    supportUrl:          ""
+    knownIssuesUrl:      ""
+    releaseNotesUrl:     ""
+
+images:
+    productLogo:         "logo.svg"
+    productIcon:         "logo.svg"
+    productWelcome:      "welcome.svg"
+
+slideshow:               "slideshow.qml"
+
+style:
+    sidebarBackground:    "#2E6FD9"
+    sidebarText:          "#FFFFFF"
+    sidebarTextSelect:    "#FFFFFF"
+    sidebarTextHighlight: "#7EB8F7"

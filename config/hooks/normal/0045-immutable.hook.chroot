@@ -1,0 +1,69 @@
+#!/bin/bash
+# Hook: configura il filesystem immutabile con OverlayFS — AuraOS
+
+set -e
+
+echo "=== [AuraOS] Configurazione filesystem immutabile (OverlayFS) ==="
+
+# ── Directory di configurazione overlay ──────────────────────────────────────
+# Il file overlay.conf viene scritto da auraos-cleanup.sh durante l'installazione.
+# Qui creiamo solo la directory; il file arriverà a install-time.
+install -d /etc/auraos
+
+# ── Permessi eseguibili ───────────────────────────────────────────────────────
+chmod +x /etc/initramfs-tools/scripts/init-bottom/auraos-overlayfs
+chmod +x /usr/local/sbin/auraos-update
+chmod +x /usr/local/sbin/auraos-unlock
+chmod +x /usr/local/sbin/auraos-lock
+chmod +x /usr/local/sbin/auraos-status
+chmod +x /usr/local/sbin/auraos-reset
+
+# Symlink in /usr/local/bin per accesso senza path completo
+for tool in auraos-status auraos-update auraos-unlock auraos-lock auraos-reset; do
+    ln -sf "/usr/local/sbin/$tool" "/usr/local/bin/$tool" 2>/dev/null || true
+done
+
+# ── blkid deve essere disponibile nell'initramfs ─────────────────────────────
+# blkid viene dal pacchetto util-linux, già installato.
+# Forza la sua inclusione nell'initramfs aggiungendolo ai binari copiati.
+if ! grep -q "blkid" /etc/initramfs-tools/hooks/auraos-tools 2>/dev/null; then
+    install -d /etc/initramfs-tools/hooks
+    cat > /etc/initramfs-tools/hooks/auraos-tools <<'HOOK'
+#!/bin/sh
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+. /usr/share/initramfs-tools/hook-functions
+copy_exec /sbin/blkid /sbin
+HOOK
+    chmod +x /etc/initramfs-tools/hooks/auraos-tools
+fi
+
+# ── Modulo overlay nell'initramfs ─────────────────────────────────────────────
+grep -q "^overlay" /etc/initramfs-tools/modules 2>/dev/null \
+    || echo "overlay" >> /etc/initramfs-tools/modules
+
+# ── Ricostruisce initramfs ────────────────────────────────────────────────────
+echo "[overlay] Rebuild initramfs..."
+update-initramfs -u -k all 2>/dev/null \
+    || update-initramfs -u 2>/dev/null \
+    || echo "[WARN] update-initramfs fallito — eseguire manualmente al primo avvio"
+echo "[overlay] Initramfs aggiornato"
+
+# ── Voce GNOME per auraos-status ─────────────────────────────────────────────
+cat > /usr/share/applications/auraos-tools.desktop <<'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AuraOS System Info
+Name[it]=AuraOS Info Sistema
+Comment=Stato del filesystem immutabile e strumenti di sistema
+Exec=bash -c 'auraos-status; echo ""; read -p "Premi Invio per chiudere..."'
+Icon=system-run
+Terminal=true
+Categories=System;
+Keywords=immutable;overlay;auraos;sistema;
+StartupNotify=false
+EOF
+
+echo "=== [AuraOS] OverlayFS configurato OK ==="

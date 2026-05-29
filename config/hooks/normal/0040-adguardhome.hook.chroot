@@ -1,0 +1,258 @@
+#!/bin/bash
+# Hook: installa e preconfigura AdGuard Home come filtro DNS locale
+
+set -e
+
+echo "=== [AuraOS] Installazione AdGuard Home ==="
+
+AGH_DIR="/opt/AdGuardHome"
+AGH_BIN="$AGH_DIR/AdGuardHome"
+
+# --- Scarica AdGuard Home (versione più recente disponibile) ---
+AGH_VERSION=$(curl -sf \
+    "https://api.github.com/repos/AdguardTeam/AdGuardHome/releases/latest" \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['tag_name'])" \
+    2>/dev/null || echo "v0.107.64")
+
+echo "[adguard] Versione: $AGH_VERSION"
+
+TARBALL_URL="https://github.com/AdguardTeam/AdGuardHome/releases/download/${AGH_VERSION}/AdGuardHome_linux_amd64.tar.gz"
+
+mkdir -p "$AGH_DIR"
+if ! curl -fsSL "$TARBALL_URL" -o /tmp/AdGuardHome.tar.gz; then
+    echo "[adguard] ERRORE: impossibile scaricare AdGuard Home, skip"
+    exit 0
+fi
+
+tar -xzf /tmp/AdGuardHome.tar.gz -C /tmp/
+install -m 0755 /tmp/AdGuardHome/AdGuardHome "$AGH_BIN"
+rm -rf /tmp/AdGuardHome /tmp/AdGuardHome.tar.gz
+
+echo "[adguard] Binario installato in $AGH_BIN"
+
+# --- Configurazione pre-impostata ---
+# users: [] -> al primo accesso web (localhost:3000) viene chiesto di creare la password
+# DNS: binding su tutte le interfacce, porta 53
+# Upstream: Quad9 (sicurezza) + Cloudflare con DoH
+# Safe browsing e filtri ad/malware abilitati di default
+cat > "$AGH_DIR/AdGuardHome.yaml" <<'AGHCONFIG'
+http:
+  pprof:
+    port: 6060
+    enabled: false
+  address: 127.0.0.1:3000
+  session_ttl: 720h
+users: []
+auth_attempts: 5
+block_auth_min: 15
+http_proxy: ""
+language: it
+theme: auto
+debug_pprof: false
+web_session_ttl: 720
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+  anonymize_client_ip: false
+  ratelimit: 20
+  ratelimit_subnet_len_ipv4: 24
+  ratelimit_subnet_len_ipv6: 56
+  ratelimit_whitelist: []
+  refuse_any: true
+  upstream_dns:
+    - https://dns10.quad9.net/dns-query
+    - https://security.cloudflare-dns.com/dns-query
+    - https://dns.adguard-dns.com/dns-query
+  upstream_dns_file: ""
+  bootstrap_dns:
+    - 9.9.9.10
+    - 149.112.112.10
+    - 1.1.1.1
+  fallback_dns:
+    - 9.9.9.9
+    - 1.1.1.1
+  all_servers: false
+  fastest_addr: false
+  fastest_timeout: 1s
+  allowed_clients: []
+  disallowed_clients: []
+  blocked_hosts:
+    - version.bind
+    - id.server
+    - hostname.bind
+  trusted_proxies:
+    - 127.0.0.0/8
+    - ::1/128
+  cache_size: 4194304
+  cache_ttl_min: 0
+  cache_ttl_max: 0
+  cache_optimistic: true
+  bogus_nxdomain: []
+  aaaa_disabled: false
+  enable_dnssec: true
+  edns_client_subnet:
+    custom_ip: ""
+    enabled: false
+    use_custom: false
+  max_goroutines: 300
+  handle_dnsrewrite_before_filtering: true
+  upstream_timeout: 10s
+  use_private_ptr_resolvers: true
+  local_ptr_upstreams: []
+  use_dns64: false
+  serve_plain_dns: true
+  hostsfile_enabled: true
+tls:
+  enabled: false
+  server_name: ""
+  force_https: false
+  port_https: 443
+  port_dns_over_tls: 853
+  port_dns_over_quic: 853
+  port_dnscrypt: 5443
+  dnscrypt_config_file: ""
+  allow_unencrypted_doh: false
+  certificate_chain: ""
+  private_key: ""
+  certificate_path: ""
+  private_key_path: ""
+  strict_sni_check: false
+querylog:
+  dir_path: ""
+  ignored: []
+  interval: 2160h
+  size_memory: 1000
+  enabled: true
+  file_enabled: true
+statistics:
+  dir_path: ""
+  ignored: []
+  interval: 2160h
+  enabled: true
+  limit: 0
+filters:
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+    name: AdGuard DNS filter
+    id: 1
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt
+    name: AdAway Default Blocklist
+    id: 2
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_9.txt
+    name: Malicious URL Blocklist (uBlock)
+    id: 9
+  - enabled: true
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_4.txt
+    name: Dan Pollock's List
+    id: 4
+whitelist_filters: []
+user_rules: []
+dhcp:
+  enabled: false
+  interface_name: ""
+  local_domain_name: lan
+  dhcpv4:
+    gateway_ip: ""
+    subnet_mask: ""
+    range_start: ""
+    range_end: ""
+    lease_duration: 86400
+    icmp_timeout_msec: 1000
+    options: []
+  dhcpv6:
+    range_start: ""
+    lease_duration: 86400
+    ra_slaac_only: false
+    ra_allow_slaac: false
+filtering:
+  blocking_ipv4: "94.140.14.33"
+  blocking_ipv6: "2a05:d014:ab5:b500:93e3:15da:9fcf:d4ff"
+  blocked_services:
+    schedule:
+      time_zone: Local
+    ids: []
+  protection_disabled_until: null
+  safe_search:
+    enabled: false
+    bing: true
+    duckduckgo: true
+    google: true
+    pixabay: true
+    yandex: true
+    youtube: true
+  blocking_mode: custom_ip
+  parental_block_host: family-block.dns.adguard.com
+  safebrowsing_block_host: standard-block.dns.adguard.com
+  rewrites: []
+  safebrowsing_cache_size: 1048576
+  safesearch_cache_size: 1048576
+  parental_cache_size: 1048576
+  cache_time: 30
+  filters_update_interval: 24
+  blocked_response_ttl: 10
+  filtering_enabled: true
+  parental_enabled: false
+  safebrowsing_enabled: true
+  protection_enabled: true
+clients:
+  runtime_sources:
+    whois: true
+    arp: true
+    rdns: true
+    dhcp: true
+    hosts: true
+  persistent: []
+log:
+  enabled: true
+  file: ""
+  max_backups: 0
+  max_size: 100
+  max_age: 7
+  compress: false
+  local_time: true
+  verbose: false
+os:
+  group: ""
+  user: ""
+  rlimit_nofile: 0
+schema_version: 28
+AGHCONFIG
+
+chmod 640 "$AGH_DIR/AdGuardHome.yaml"
+
+# --- Crea il file di servizio systemd manualmente ---
+# (evita di dipendere da `AdGuardHome -s install` che richiede systemd in esecuzione)
+cat > /etc/systemd/system/AdGuardHome.service <<'SVCEOF'
+[Unit]
+Description=AdGuard Home: DNS-over-HTTPS filtro locale
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+Environment=HOME=/opt/AdGuardHome
+WorkingDirectory=/opt/AdGuardHome
+ExecStart=/opt/AdGuardHome/AdGuardHome \
+    --no-check-update \
+    --work-dir /opt/AdGuardHome \
+    --config /opt/AdGuardHome/AdGuardHome.yaml
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
+systemctl enable AdGuardHome.service
+
+# --- UFW: permetti accesso alla web UI solo da localhost ---
+# La porta 53 è già accessibile localmente; il filtro funziona senza regole extra.
+# Abilita esplicitamente 3000 solo per localhost (sicurezza).
+ufw allow from 127.0.0.1 to any port 3000 proto tcp 2>/dev/null || true
+
+echo "[adguard] AdGuard Home configurato e servizio abilitato"
+echo "=== [AuraOS] AdGuard Home OK ==="

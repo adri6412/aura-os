@@ -1,0 +1,14 @@
+#!/bin/bash
+# auraos-unlock — sblocca temporaneamente il root reale in scrittura.
+# Usare per installare software manualmente; richiede auraos-lock al termine.
+# ATTENZIONE: le modifiche vanno al root reale e sopravvivono ai riavvii.
+
+[[ $EUID -ne 0 ]] && { echo "Errore: eseguire come root (sudo auraos-unlock)." >&2; exit 1; }
+
+LOWER="/run/aura-lower"
+[ ! -d "$LOWER/usr" ] && { echo "[AuraOS] Overlay non attivo."; exit 1; }
+
+mount -o remount,rw "$LOWER"
+echo "[AuraOS] Root sbloccato (read-write)."
+echo "[AuraOS] ATTENZIONE: le modifiche saranno permanenti."
+echo "[AuraOS] Esegui 'sudo auraos-lock' quando hai finito."

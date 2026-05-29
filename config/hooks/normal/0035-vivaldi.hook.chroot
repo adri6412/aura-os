@@ -1,0 +1,75 @@
+#!/bin/bash
+# Hook: installa Vivaldi — AuraOS
+
+set -e
+
+echo "=== [AuraOS] Installazione Vivaldi ==="
+
+curl -fsSL https://repo.vivaldi.com/archive/linux_signing_key.pub \
+    | gpg --dearmor -o /usr/share/keyrings/vivaldi-archive-keyring.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/vivaldi-archive-keyring.gpg arch=amd64] \
+https://repo.vivaldi.com/archive/deb/ stable main" \
+    > /etc/apt/sources.list.d/vivaldi.list
+
+apt-get update -qq
+apt-get install -y vivaldi-stable
+
+echo "[vivaldi] Installato: $(dpkg -l vivaldi-stable | awk '/^ii/{print $3}')"
+
+POLICIES_DIR="/etc/opt/vivaldi/policies/managed"
+mkdir -p "$POLICIES_DIR"
+
+cat > "$POLICIES_DIR/auraos.json" <<'EOF'
+{
+  "SafeBrowsingEnabled": true,
+  "SafeBrowsingExtendedReportingEnabled": false,
+  "PasswordLeakDetectionEnabled": true,
+  "HttpsOnlyMode": "force_enabled",
+  "DefaultPopupsSetting": 2,
+  "DefaultNotificationsSetting": 2,
+  "DefaultGeolocationSetting": 2,
+  "DefaultWebBluetoothGuardSetting": 2,
+  "DefaultWebUsbGuardSetting": 2,
+  "DownloadRestrictions": 1,
+  "MetricsReportingEnabled": false,
+  "BrowserSignin": 0,
+  "SyncDisabled": false,
+  "PaymentMethodQueryEnabled": false,
+  "AutofillCreditCardEnabled": false,
+  "BuiltInDnsClientEnabled": false,
+  "DnsOverHttpsMode": "off",
+  "NativeMessagingUserLevelHosts": false,
+  "BackgroundModeEnabled": false,
+  "BlockThirdPartyCookies": false,
+  "URLBlocklist": [
+    "javascript://*"
+  ]
+}
+EOF
+
+chmod 644 "$POLICIES_DIR/auraos.json"
+
+cat > /etc/opt/vivaldi/master_preferences <<'EOF'
+{
+  "browser": {
+    "show_home_button": false,
+    "custom_chrome_frame": false
+  },
+  "bookmark_bar": {
+    "show_on_all_tabs": false
+  },
+  "homepage": "about:newtab",
+  "homepage_is_newtab": true,
+  "session": {
+    "restore_on_startup": 1
+  }
+}
+EOF
+
+chmod 644 /etc/opt/vivaldi/master_preferences
+
+update-alternatives --set x-www-browser /usr/bin/vivaldi-stable 2>/dev/null || true
+update-alternatives --set gnome-www-browser /usr/bin/vivaldi-stable 2>/dev/null || true
+
+echo "=== [AuraOS] Vivaldi OK ==="

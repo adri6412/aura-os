@@ -1,0 +1,344 @@
+#!/bin/bash
+# Hook: configura GNOME con estetica macOS per AuraOS
+
+set -e
+
+echo "=== [AuraOS] Configurazione GNOME ==="
+
+# ── GSettings schema override ────────────────────────────────────────────────
+install -d /usr/share/glib-2.0/schemas/
+
+cat > /usr/share/glib-2.0/schemas/99_auraos.gschema.override <<'EOF'
+[org.gnome.desktop.interface]
+text-scaling-factor=1.0
+cursor-size=24
+font-name='Inter 10'
+document-font-name='Inter 10'
+monospace-font-name='Liberation Mono 10'
+titlebar-font='Inter Bold 10'
+gtk-theme='WhiteSur-Light'
+icon-theme='WhiteSur'
+cursor-theme='WhiteSur-cursors'
+show-battery-percentage=true
+clock-show-date=true
+clock-show-weekday=false
+clock-format='24h'
+enable-animations=true
+color-scheme='default'
+
+[org.gnome.desktop.a11y.interface]
+high-contrast=false
+
+[org.gnome.desktop.a11y.keyboard]
+enable=false
+
+[org.gnome.desktop.sound]
+event-sounds=true
+input-feedback-sounds=false
+
+[org.gnome.desktop.background]
+picture-uri='file:///usr/share/pixmaps/auraos-wallpaper.svg'
+picture-uri-dark='file:///usr/share/pixmaps/auraos-wallpaper-dark.svg'
+picture-options='zoom'
+primary-color='#F0F0F0'
+
+[org.gnome.desktop.screensaver]
+lock-enabled=true
+lock-delay=uint32 300
+idle-activation-enabled=true
+
+[org.gnome.desktop.session]
+idle-delay=uint32 300
+
+[org.gnome.settings-daemon.plugins.power]
+sleep-inactive-ac-type='suspend'
+sleep-inactive-battery-type='suspend'
+power-button-action='interactive'
+
+[org.gnome.nautilus.preferences]
+default-folder-viewer='icon-view'
+show-hidden-files=false
+always-use-browser=true
+
+[org.gnome.nautilus.icon-view]
+default-zoom-level='small'
+
+[org.gnome.desktop.wm.preferences]
+button-layout='close,minimize,maximize:'
+num-workspaces=4
+
+[org.gnome.mutter]
+dynamic-workspaces=true
+edge-tiling=true
+EOF
+
+glib-compile-schemas /usr/share/glib-2.0/schemas/
+echo "[gnome] GSettings schema compilato"
+
+# ── Locale e timezone ─────────────────────────────────────────────────────────
+cat > /etc/locale.gen <<'EOF'
+it_IT.UTF-8 UTF-8
+en_US.UTF-8 UTF-8
+EOF
+locale-gen
+update-locale LANG=it_IT.UTF-8 LANGUAGE=it_IT:it LC_ALL=it_IT.UTF-8
+ln -sf /usr/share/zoneinfo/Europe/Rome /etc/localtime
+echo "Europe/Rome" > /etc/timezone
+
+# ── Logo piccolo per il panel ArcMenu (sostituisce "Activities", come mela macOS) ──
+cat > /usr/share/pixmaps/auraos-panel-logo.svg <<'SVGEOF'
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <defs>
+    <radialGradient id="g" cx="42%" cy="38%" r="65%">
+      <stop offset="0%" stop-color="#9ECEF8"/>
+      <stop offset="100%" stop-color="#2E6FD9"/>
+    </radialGradient>
+  </defs>
+  <circle cx="10" cy="10" r="9" fill="url(#g)"/>
+  <text x="10" y="15" font-family="Helvetica Neue,Helvetica,Arial,sans-serif"
+        font-size="13" font-weight="200" fill="white" text-anchor="middle">a</text>
+</svg>
+SVGEOF
+
+# ── Wallpaper — stile macOS Sonoma (gradiente caldo, cielo e terra) ───────────
+cat > /usr/share/pixmaps/auraos-wallpaper.svg <<'SVGEOF'
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#87CEEB"/>
+      <stop offset="35%"  stop-color="#B8D4E8"/>
+      <stop offset="60%"  stop-color="#E8D5C4"/>
+      <stop offset="80%"  stop-color="#D4956A"/>
+      <stop offset="100%" stop-color="#8B4513"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="70%" cy="42%" r="18%">
+      <stop offset="0%"   stop-color="#FFF5B0" stop-opacity="0.9"/>
+      <stop offset="60%"  stop-color="#FFD580" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#FFD580" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hills" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#6B8E60"/>
+      <stop offset="100%" stop-color="#4A6741"/>
+    </linearGradient>
+    <linearGradient id="hills2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#8BAA7A"/>
+      <stop offset="100%" stop-color="#6B8E60"/>
+    </linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <ellipse cx="1344" cy="453" rx="320" ry="320" fill="url(#sun)" filter="url(#blur)"/>
+  <!-- distant hills -->
+  <ellipse cx="300"  cy="820" rx="500" ry="220" fill="url(#hills2)" opacity="0.7"/>
+  <ellipse cx="900"  cy="850" rx="600" ry="200" fill="url(#hills2)" opacity="0.8"/>
+  <ellipse cx="1600" cy="810" rx="550" ry="240" fill="url(#hills2)" opacity="0.7"/>
+  <!-- foreground hills -->
+  <ellipse cx="200"  cy="950" rx="600" ry="260" fill="url(#hills)"/>
+  <ellipse cx="960"  cy="980" rx="800" ry="260" fill="url(#hills)"/>
+  <ellipse cx="1750" cy="960" rx="650" ry="260" fill="url(#hills)"/>
+  <!-- ground strip -->
+  <rect x="0" y="960" width="1920" height="120" fill="#4A6741"/>
+</svg>
+SVGEOF
+
+# Versione scura (notte stellata stile macOS)
+cat > /usr/share/pixmaps/auraos-wallpaper-dark.svg <<'SVGEOF'
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">
+  <defs>
+    <linearGradient id="nightsky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0A0E1A"/>
+      <stop offset="50%"  stop-color="#1A1F3A"/>
+      <stop offset="100%" stop-color="#0D1B2A"/>
+    </linearGradient>
+    <radialGradient id="moon" cx="75%" cy="20%" r="10%">
+      <stop offset="0%"   stop-color="#E8E8D0" stop-opacity="0.95"/>
+      <stop offset="70%"  stop-color="#C8C8A0" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#C8C8A0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="75%" cy="20%" r="25%">
+      <stop offset="0%"   stop-color="#4455AA" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#4455AA" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hills-dark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#1A2810"/>
+      <stop offset="100%" stop-color="#0D1508"/>
+    </linearGradient>
+    <filter id="blur2"><feGaussianBlur stdDeviation="8"/></filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#nightsky)"/>
+  <!-- moon glow -->
+  <ellipse cx="1440" cy="216" rx="480" ry="480" fill="url(#glow)" filter="url(#blur2)"/>
+  <!-- moon -->
+  <circle cx="1440" cy="216" r="70" fill="url(#moon)"/>
+  <!-- stars -->
+  <circle cx="200"  cy="80"  r="1.5" fill="white" opacity="0.9"/>
+  <circle cx="450"  cy="140" r="1"   fill="white" opacity="0.7"/>
+  <circle cx="700"  cy="60"  r="2"   fill="white" opacity="0.8"/>
+  <circle cx="900"  cy="110" r="1.5" fill="white" opacity="0.9"/>
+  <circle cx="300"  cy="200" r="1"   fill="white" opacity="0.6"/>
+  <circle cx="600"  cy="180" r="1.5" fill="white" opacity="0.8"/>
+  <circle cx="1100" cy="90"  r="1"   fill="white" opacity="0.7"/>
+  <circle cx="150"  cy="310" r="1.5" fill="white" opacity="0.8"/>
+  <circle cx="820"  cy="250" r="1"   fill="white" opacity="0.6"/>
+  <circle cx="1200" cy="160" r="2"   fill="white" opacity="0.9"/>
+  <circle cx="400"  cy="350" r="1"   fill="white" opacity="0.7"/>
+  <circle cx="550"  cy="290" r="1.5" fill="white" opacity="0.8"/>
+  <circle cx="1050" cy="320" r="1"   fill="white" opacity="0.6"/>
+  <circle cx="1300" cy="280" r="1.5" fill="white" opacity="0.7"/>
+  <!-- hills -->
+  <ellipse cx="200"  cy="950" rx="600" ry="260" fill="url(#hills-dark)"/>
+  <ellipse cx="960"  cy="980" rx="800" ry="260" fill="url(#hills-dark)"/>
+  <ellipse cx="1750" cy="960" rx="650" ry="260" fill="url(#hills-dark)"/>
+  <rect x="0" y="970" width="1920" height="110" fill="#0D1508"/>
+</svg>
+SVGEOF
+
+# ── /etc/skel — impostazioni utente ──────────────────────────────────────────
+install -d /etc/skel/.config/gtk-3.0
+cat > /etc/skel/.config/gtk-3.0/settings.ini <<'EOF'
+[Settings]
+gtk-theme-name=WhiteSur-Light
+gtk-icon-theme-name=WhiteSur
+gtk-cursor-theme-name=WhiteSur-cursors
+gtk-font-name=Inter 10
+gtk-application-prefer-dark-theme=0
+EOF
+
+install -d /etc/skel/.config/gtk-4.0
+cat > /etc/skel/.config/gtk-4.0/settings.ini <<'EOF'
+[Settings]
+gtk-theme-name=WhiteSur-Light
+gtk-icon-theme-name=WhiteSur
+gtk-cursor-theme-name=WhiteSur-cursors
+gtk-font-name=Inter 10
+gtk-application-prefer-dark-theme=0
+EOF
+
+cat > /etc/skel/.gtkrc-2.0 <<'EOF'
+gtk-theme-name="WhiteSur-Light"
+gtk-icon-theme-name="WhiteSur"
+gtk-font-name="Inter 10"
+gtk-cursor-theme-name="WhiteSur-cursors"
+EOF
+
+install -d /etc/skel/.icons/default
+cat > /etc/skel/.icons/default/index.theme <<'EOF'
+[Icon Theme]
+Name=Default
+Comment=Default Cursor Theme
+Inherits=WhiteSur-cursors,Adwaita
+EOF
+
+# dconf user settings — Dash to Dock stile macOS + tema shell
+install -d /etc/skel/.config/dconf
+DCONF_KEYDIR=$(mktemp -d)
+cat > "$DCONF_KEYDIR/01-auraos" <<'EOF'
+[org/gnome/shell/extensions/user-theme]
+name='WhiteSur-Light'
+
+[org/gnome/shell/extensions/dash-to-dock]
+dock-position='BOTTOM'
+extend-height=false
+dash-max-icon-size=48
+show-trash=false
+show-mounts=false
+click-action='focus-or-previews'
+scroll-action='cycle-windows'
+animate-show-apps=true
+running-indicator-style='DOTS'
+custom-theme-shrink=true
+transparency-mode='FIXED'
+background-opacity=0.6
+intellihide=true
+intellihide-mode='FOCUS_APPLICATION_WINDOWS'
+
+[org/gnome/shell/extensions/blur-my-shell]
+blur-panel=true
+blur-overview=true
+
+[org/gnome/shell]
+enabled-extensions=['dash-to-dock@micxgx.gmail.com', 'user-theme@gnome-shell-extensions.gcampax.github.com', 'blur-my-shell@aunetx', 'ding@rastersoft.com', 'auraos-panel@auraos']
+
+[org/gnome/shell/app-switcher]
+current-workspace-only=false
+EOF
+
+if command -v dconf &>/dev/null; then
+    dconf compile /etc/skel/.config/dconf/user "$DCONF_KEYDIR" 2>/dev/null \
+        && echo "[skel] dconf user DB compilato" \
+        || echo "[skel] dconf compile non disponibile, saltato"
+fi
+rm -rf "$DCONF_KEYDIR"
+
+chmod -R a+rX /etc/skel/.config /etc/skel/.icons /etc/skel/.gtkrc-2.0 2>/dev/null || true
+
+# ── os-release ────────────────────────────────────────────────────────────────
+cat > /etc/os-release <<'EOF'
+PRETTY_NAME="AuraOS 1.0"
+NAME="AuraOS"
+VERSION="1.0"
+VERSION_ID="1"
+ID=auraos
+ID_LIKE=debian
+HOME_URL=""
+SUPPORT_URL=""
+BUG_REPORT_URL=""
+EOF
+
+cat > /etc/lsb-release <<'EOF'
+DISTRIB_ID=AuraOS
+DISTRIB_RELEASE=1.0
+DISTRIB_CODENAME=stable
+DISTRIB_DESCRIPTION="AuraOS 1.0"
+EOF
+
+echo "AuraOS \n \l" > /etc/issue
+echo "AuraOS"       > /etc/issue.net
+
+# ── Logo SVG per la schermata di login GDM ───────────────────────────────────
+cat > /usr/share/pixmaps/auraos-login-logo.svg <<'SVGEOF'
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="60%">
+      <stop offset="0%"   stop-color="#7EB8F7"/>
+      <stop offset="100%" stop-color="#2E6FD9"/>
+    </radialGradient>
+  </defs>
+  <circle cx="48" cy="48" r="44" fill="url(#bg)"/>
+  <text x="48" y="66" font-family="Inter,Helvetica,Arial,sans-serif"
+        font-size="52" font-weight="300" fill="white" text-anchor="middle">a</text>
+</svg>
+SVGEOF
+
+# ── GDM branding ──────────────────────────────────────────────────────────────
+mkdir -p /etc/gdm3
+cat > /etc/gdm3/greeter.dconf-defaults <<'EOF'
+[org/gnome/desktop/background]
+picture-uri='file:///usr/share/pixmaps/auraos-wallpaper.svg'
+picture-uri-dark='file:///usr/share/pixmaps/auraos-wallpaper-dark.svg'
+picture-options='zoom'
+primary-color='#F0F0F0'
+color-shading-type='solid'
+
+[org/gnome/desktop/screensaver]
+picture-uri='file:///usr/share/pixmaps/auraos-wallpaper.svg'
+
+[org/gnome/login-screen]
+logo='/usr/share/pixmaps/auraos-login-logo.svg'
+banner-message-enable=false
+disable-user-list=false
+EOF
+
+mkdir -p /etc/dconf/profile
+cat > /etc/dconf/profile/gdm <<'PROFILE'
+user-db:user
+system-db:gdm
+PROFILE
+
+mkdir -p /etc/dconf/db/gdm.d
+cp /etc/gdm3/greeter.dconf-defaults /etc/dconf/db/gdm.d/00-auraos
+
+dconf update 2>/dev/null || true
+echo "[gdm] Branding GDM aggiornato"
+
+echo "=== [AuraOS] GNOME configurato OK ==="

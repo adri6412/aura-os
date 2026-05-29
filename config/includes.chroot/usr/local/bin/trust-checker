@@ -1,0 +1,3 @@
+#!/bin/bash
+# Launcher Verificatore di Fiducia
+exec python3 /opt/trust-checker/trust_checker.py "$@"

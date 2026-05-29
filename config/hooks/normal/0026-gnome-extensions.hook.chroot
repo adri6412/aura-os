@@ -1,0 +1,125 @@
+#!/bin/bash
+# Hook: installa estensioni GNOME non disponibili nei repo Debian
+#   - auraos-panel@auraos   : logo AuraOS + nasconde Activities (custom, inline)
+#   - blur-my-shell@aunetx  : effetto blur sulla top bar (da GitHub)
+
+set -e
+
+echo "=== [AuraOS] Installazione estensioni GNOME extra ==="
+
+EXT_SYS="/usr/share/gnome-shell/extensions"
+install -d "$EXT_SYS"
+
+# ── 1. auraos-panel@auraos ────────────────────────────────────────────────────
+# Estensione custom che:
+#   - Nasconde il pulsante "Activities" (troppo GNOME-like)
+#   - Aggiunge il logo AuraOS in alto a sinistra (come la mela di macOS)
+#     che apre l'Activities Overview al clic
+
+UUID="auraos-panel@auraos"
+DIR="$EXT_SYS/$UUID"
+install -d "$DIR"
+
+cat > "$DIR/metadata.json" <<'EOF'
+{
+  "name": "AuraOS Panel",
+  "description": "Replaces Activities with the AuraOS logo button",
+  "uuid": "auraos-panel@auraos",
+  "shell-version": ["45", "46", "47", "48", "49"],
+  "version": 1
+}
+EOF
+
+# GNOME 45+ usa ES modules (import/export)
+cat > "$DIR/extension.js" <<'EOF'
+import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import St from 'gi://St';
+import Gio from 'gi://Gio';
+import Clutter from 'gi://Clutter';
+
+export default class AuraOSPanelExtension extends Extension {
+    enable() {
+        // Nascondi il pulsante Activities di GNOME
+        this._activities = Main.panel.statusArea.activities;
+        if (this._activities)
+            this._activities.hide();
+
+        // Crea il pulsante logo AuraOS
+        this._btn = new St.Button({
+            style_class: 'panel-button',
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+            accessible_name: 'AuraOS',
+        });
+
+        const icon = new St.Icon({
+            gicon: Gio.icon_new_for_string('/usr/share/pixmaps/auraos-panel-logo.svg'),
+            icon_size: 20,
+            style: 'padding: 0 4px;',
+        });
+        this._btn.set_child(icon);
+
+        // Clic: apre l'app grid (come clic sul Dock di macOS)
+        this._btn.connect('clicked', () => {
+            if (Main.overview.visible)
+                Main.overview.hide();
+            else
+                Main.overview.showApps();
+        });
+
+        Main.panel._leftBox.insert_child_at_index(this._btn, 0);
+    }
+
+    disable() {
+        if (this._btn) {
+            this._btn.destroy();
+            this._btn = null;
+        }
+        if (this._activities)
+            this._activities.show();
+        this._activities = null;
+    }
+}
+EOF
+
+chmod -R a+rX "$DIR"
+echo "[ext] auraos-panel@auraos: OK"
+
+# ── 2. blur-my-shell@aunetx ───────────────────────────────────────────────────
+UUID2="blur-my-shell@aunetx"
+DIR2="$EXT_SYS/$UUID2"
+
+if [ ! -d "$DIR2" ]; then
+    echo "[ext] Download blur-my-shell..."
+
+    BMS_VER=$(curl -sf \
+        "https://api.github.com/repos/aunetx/blur-my-shell/releases/latest" \
+        | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" \
+        2>/dev/null || echo "v62")
+
+    BMS_URL="https://github.com/aunetx/blur-my-shell/releases/download/${BMS_VER}/blur-my-shell@aunetx.shell-extension.zip"
+
+    if curl -fsSL "$BMS_URL" -o /tmp/blur-my-shell.zip 2>/dev/null; then
+        install -d "$DIR2"
+        unzip -q /tmp/blur-my-shell.zip -d "$DIR2/"
+        rm -f /tmp/blur-my-shell.zip
+        chmod -R a+rX "$DIR2"
+        echo "[ext] blur-my-shell@aunetx ${BMS_VER}: OK"
+    else
+        echo "[WARN] blur-my-shell: download fallito, estensione non disponibile"
+        # Non è critico: il sistema funziona senza l'effetto blur
+    fi
+else
+    echo "[ext] blur-my-shell@aunetx: già presente"
+fi
+
+# ── Aggiorna cache estensioni ─────────────────────────────────────────────────
+if command -v glib-compile-schemas &>/dev/null; then
+    for d in "$EXT_SYS"/*/schemas; do
+        [ -d "$d" ] && glib-compile-schemas "$d" 2>/dev/null || true
+    done
+fi
+
+echo "=== [AuraOS] Estensioni GNOME installate OK ==="

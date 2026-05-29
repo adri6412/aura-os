@@ -1,0 +1,13 @@
+[Unit]
+Description=AuraOS - Cleanup primo avvio (rimozione Calamares/live)
+After=multi-user.target
+ConditionKernelCommandLine=!boot=live
+ConditionPathExists=/usr/bin/calamares
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /usr/local/lib/auraos-cleanup.sh
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

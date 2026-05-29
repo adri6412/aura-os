@@ -1,0 +1,25 @@
+[Unit]
+Description=ScamShield — Protezione Anti-Truffa
+Documentation=https://github.com/adri6412/scammerprevention
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/scamshield
+Restart=on-failure
+RestartSec=10
+# Ritardo per attendere che la sessione grafica sia pronta
+ExecStartPre=/bin/sleep 5
+
+# Variabili d'ambiente per sessione grafica utente
+Environment=PYTHONPATH=/opt/scamshield
+Environment=QT_QPA_PLATFORM=xcb
+EnvironmentFile=-%h/.config/scamshield/env
+
+# Limita uso CPU in background
+CPUWeight=20
+IOWeight=20
+
+[Install]
+WantedBy=graphical-session.target
