@@ -1,0 +1,270 @@
+#!/bin/bash
+# auraos-switch — applica/rimuove profili di sistema AuraOS.
+# I profili sostituiscono componenti di sistema (es. PipeWire → PulseAudio)
+# operando sul lower layer immutabile. Richiede riavvio per avere effetto.
+#
+# Utilizzo:
+#   auraos-switch list                  → elenca profili disponibili
+#   auraos-switch info <profilo>        → mostra dettagli profilo
+#   auraos-switch apply <profilo>       → applica profilo
+#   auraos-switch revert <profilo>      → reverte profilo
+
+set -euo pipefail
+
+[[ $EUID -ne 0 ]] && { echo "Errore: eseguire come root (sudo auraos-switch)." >&2; exit 1; }
+
+PROFILES_DIR="/etc/auraos/profiles"
+ACTIVE_FILE="/etc/auraos/active-profiles.conf"
+LOWER="/run/aura-lower"
+
+# Se overlay attivo, opera su lower layer; altrimenti opera direttamente
+if [[ -d "$LOWER/usr" ]]; then
+    TARGET="$LOWER"
+    OVERLAY_ACTIVE=true
+else
+    TARGET=""
+    OVERLAY_ACTIVE=false
+fi
+
+# ── Helper ────────────────────────────────────────────────────────────────────
+
+load_profile() {
+    local name="$1"
+    local file="${TARGET}${PROFILES_DIR}/${name}.profile"
+    [[ -f "$file" ]] || { echo "Errore: profilo '$name' non trovato in $PROFILES_DIR." >&2; exit 1; }
+    # Reset variabili
+    PROFILE_NAME="" PROFILE_DESC="" PROFILE_CONFLICTS=""
+    REMOVE_PACKAGES="" INSTALL_PACKAGES=""
+    DISABLE_SERVICES="" ENABLE_SERVICES=""
+    # shellcheck source=/dev/null
+    source "$file"
+}
+
+is_active() {
+    local name="$1"
+    local active_file="${TARGET}${ACTIVE_FILE}"
+    [[ -f "$active_file" ]] && grep -qx "$name" "$active_file"
+}
+
+mark_active() {
+    local name="$1"
+    local active_file="${TARGET}${ACTIVE_FILE}"
+    grep -qx "$name" "$active_file" 2>/dev/null || echo "$name" >> "$active_file"
+}
+
+mark_inactive() {
+    local name="$1"
+    local active_file="${TARGET}${ACTIVE_FILE}"
+    [[ -f "$active_file" ]] && sed -i "/^${name}$/d" "$active_file" || true
+}
+
+unlock_lower() {
+    $OVERLAY_ACTIVE && mount -o remount,rw "$LOWER"
+}
+
+lock_lower() {
+    $OVERLAY_ACTIVE && { sync; mount -o remount,ro "$LOWER" 2>/dev/null || true; }
+}
+
+systemd_enable() {
+    local svc="$1" root="$2"
+    local unit_file
+    for d in lib/systemd/system usr/lib/systemd/system etc/systemd/system; do
+        [[ -f "$root/$d/$svc" ]] && unit_file="$root/$d/$svc" && break
+    done
+    [[ -z "${unit_file:-}" ]] && { echo "  WARN: unit $svc non trovata, skip."; return; }
+    local wants_dir="$root/etc/systemd/system/multi-user.target.wants"
+    mkdir -p "$wants_dir"
+    ln -sf "/${unit_file#"$root/"}" "$wants_dir/$svc" 2>/dev/null || true
+}
+
+systemd_disable() {
+    local svc="$1" root="$2"
+    find "$root/etc/systemd/system" -name "$svc" -type l -delete 2>/dev/null || true
+}
+
+# ── Comandi ───────────────────────────────────────────────────────────────────
+
+cmd_list() {
+    local active_file="${TARGET}${ACTIVE_FILE}"
+    echo "Profili disponibili (in ${PROFILES_DIR}):"
+    echo ""
+    local found=false
+    for f in "${TARGET}${PROFILES_DIR}"/*.profile; do
+        [[ -f "$f" ]] || continue
+        found=true
+        local name
+        name=$(basename "$f" .profile)
+        # shellcheck source=/dev/null
+        source "$f"
+        local status="  "
+        is_active "$name" && status="✓ "
+        printf "  %s%-30s %s\n" "$status" "$name" "${PROFILE_DESC:-$PROFILE_NAME}"
+    done
+    $found || echo "  (nessun profilo trovato)"
+    echo ""
+    echo "✓ = profilo attivo"
+}
+
+cmd_info() {
+    local name="$1"
+    load_profile "$name"
+    echo "Profilo: $name"
+    echo "  Nome:        ${PROFILE_NAME}"
+    echo "  Descrizione: ${PROFILE_DESC}"
+    [[ -n "${PROFILE_CONFLICTS}" ]] && echo "  Conflitti:   ${PROFILE_CONFLICTS}"
+    [[ -n "${REMOVE_PACKAGES}" ]]   && echo "  Rimuove:     ${REMOVE_PACKAGES}"
+    [[ -n "${INSTALL_PACKAGES}" ]]  && echo "  Installa:    ${INSTALL_PACKAGES}"
+    [[ -n "${DISABLE_SERVICES}" ]]  && echo "  Disabilita:  ${DISABLE_SERVICES}"
+    [[ -n "${ENABLE_SERVICES}" ]]   && echo "  Abilita:     ${ENABLE_SERVICES}"
+    is_active "$name" && echo "  Stato:       ATTIVO" || echo "  Stato:       non attivo"
+}
+
+cmd_apply() {
+    local name="$1"
+    load_profile "$name"
+
+    if is_active "$name"; then
+        echo "[switch] Profilo '$name' già attivo."
+        exit 0
+    fi
+
+    # Controlla conflitti
+    if [[ -n "${PROFILE_CONFLICTS}" ]]; then
+        for conflict in $PROFILE_CONFLICTS; do
+            if is_active "$conflict"; then
+                echo "Errore: profilo '$name' è in conflitto con '$conflict' (attivo)." >&2
+                echo "Esegui prima: sudo auraos-switch revert $conflict" >&2
+                exit 1
+            fi
+        done
+    fi
+
+    echo "[switch] ============================================"
+    echo "[switch]  Applicazione profilo: $PROFILE_NAME"
+    echo "[switch] ============================================"
+    $OVERLAY_ACTIVE && echo "[switch]  Operazioni sul lower layer ($LOWER)."
+    echo "[switch]  Riavvio richiesto al termine."
+    echo ""
+
+    unlock_lower
+    trap lock_lower EXIT
+
+    local root="${TARGET:-/}"
+
+    # Rimozione pacchetti
+    if [[ -n "${REMOVE_PACKAGES}" ]]; then
+        echo "[switch] Rimozione: ${REMOVE_PACKAGES}"
+        if $OVERLAY_ACTIVE; then
+            chroot "$root" apt-get remove --purge -y $REMOVE_PACKAGES 2>/dev/null || true
+            chroot "$root" apt-get autoremove --purge -y 2>/dev/null || true
+        else
+            apt-get remove --purge -y $REMOVE_PACKAGES 2>/dev/null || true
+            apt-get autoremove --purge -y 2>/dev/null || true
+        fi
+    fi
+
+    # Installazione pacchetti
+    if [[ -n "${INSTALL_PACKAGES}" ]]; then
+        echo "[switch] Installazione: ${INSTALL_PACKAGES}"
+        if $OVERLAY_ACTIVE; then
+            chroot "$root" apt-get update -qq
+            chroot "$root" apt-get install -y $INSTALL_PACKAGES
+        else
+            apt-get update -qq
+            apt-get install -y $INSTALL_PACKAGES
+        fi
+    fi
+
+    # Servizi da disabilitare
+    for svc in $DISABLE_SERVICES; do
+        echo "[switch] Disabilito: $svc"
+        systemd_disable "$svc" "$root"
+    done
+
+    # Servizi da abilitare
+    for svc in $ENABLE_SERVICES; do
+        echo "[switch] Abilito: $svc"
+        systemd_enable "$svc" "$root"
+    done
+
+    mark_active "$name"
+
+    echo ""
+    echo "[switch] ============================================"
+    echo "[switch]  Profilo '$name' applicato."
+    echo "[switch]  Riavvia per attivare le modifiche."
+    echo "[switch] ============================================"
+}
+
+cmd_revert() {
+    local name="$1"
+    load_profile "$name"
+
+    if ! is_active "$name"; then
+        echo "[switch] Profilo '$name' non attivo."
+        exit 0
+    fi
+
+    echo "[switch] Ripristino profilo default (revert: $PROFILE_NAME)..."
+
+    unlock_lower
+    trap lock_lower EXIT
+
+    local root="${TARGET:-/}"
+
+    # Rimuovi i pacchetti installati dal profilo
+    if [[ -n "${INSTALL_PACKAGES}" ]]; then
+        if $OVERLAY_ACTIVE; then
+            chroot "$root" apt-get remove --purge -y $INSTALL_PACKAGES 2>/dev/null || true
+            chroot "$root" apt-get autoremove --purge -y 2>/dev/null || true
+        else
+            apt-get remove --purge -y $INSTALL_PACKAGES 2>/dev/null || true
+            apt-get autoremove --purge -y 2>/dev/null || true
+        fi
+    fi
+
+    # Reinstalla i pacchetti rimossi dal profilo
+    if [[ -n "${REMOVE_PACKAGES}" ]]; then
+        if $OVERLAY_ACTIVE; then
+            chroot "$root" apt-get update -qq
+            chroot "$root" apt-get install -y $REMOVE_PACKAGES
+        else
+            apt-get update -qq
+            apt-get install -y $REMOVE_PACKAGES
+        fi
+    fi
+
+    # Ripristina stato servizi (inverso)
+    for svc in $ENABLE_SERVICES;  do systemd_disable "$svc" "$root"; done
+    for svc in $DISABLE_SERVICES; do systemd_enable  "$svc" "$root"; done
+
+    mark_inactive "$name"
+
+    echo "[switch] Profilo '$name' rimosso. Riavvia per applicare."
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+CMD="${1:-help}"
+shift || true
+
+case "$CMD" in
+    list)            cmd_list ;;
+    info)            [[ -n "${1:-}" ]] || { echo "Uso: auraos-switch info <profilo>" >&2; exit 1; }
+                     cmd_info "$1" ;;
+    apply)           [[ -n "${1:-}" ]] || { echo "Uso: auraos-switch apply <profilo>" >&2; exit 1; }
+                     cmd_apply "$1" ;;
+    revert)          [[ -n "${1:-}" ]] || { echo "Uso: auraos-switch revert <profilo>" >&2; exit 1; }
+                     cmd_revert "$1" ;;
+    help|--help|-h)
+        echo "Uso: auraos-switch <comando> [profilo]"
+        echo ""
+        echo "Comandi:"
+        echo "  list              Elenca profili disponibili"
+        echo "  info <profilo>    Mostra dettagli profilo"
+        echo "  apply <profilo>   Applica profilo (richiede reboot)"
+        echo "  revert <profilo>  Ripristina stato default (richiede reboot)"
+        ;;
+    *)  echo "Comando sconosciuto: $CMD. Usa 'auraos-switch help'." >&2; exit 1 ;;
+esac

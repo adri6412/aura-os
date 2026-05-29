@@ -97,11 +97,13 @@ chmod +x /usr/local/lib/auraos-cleanup.sh 2>/dev/null || true
 chmod +x /usr/local/sbin/auraos-check-updates 2>/dev/null || true
 
 # --- Inizializza versions.conf con versione AuraOS (AGH la sovrascrive dopo) ---
-mkdir -p /etc/auraos
+mkdir -p /etc/auraos/profiles
 if ! grep -q "^AURAOS_VERSION=" /etc/auraos/versions.conf 2>/dev/null; then
     sed -i '/^AURAOS_VERSION=/d' /etc/auraos/versions.conf 2>/dev/null || true
     echo 'AURAOS_VERSION="v1.0.0"' >> /etc/auraos/versions.conf
 fi
+# File di stato profili (vuoto = solo profili default attivi)
+touch /etc/auraos/active-profiles.conf
 
 mkdir -p /etc/systemd/system/multi-user.target.wants/
 ln -sf /etc/systemd/system/auraos-firstboot.service \

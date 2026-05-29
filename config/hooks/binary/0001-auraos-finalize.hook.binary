@@ -22,6 +22,7 @@ for f in \
     chroot/usr/local/sbin/auraos-status \
     chroot/usr/local/sbin/auraos-reset \
     chroot/usr/local/sbin/auraos-check-updates \
+    chroot/usr/local/sbin/auraos-switch \
     chroot/config/hooks/normal/*.hook.chroot 2>/dev/null; do
     [ -f "$f" ] && chmod +x "$f" && echo "[perm] $f"
 done

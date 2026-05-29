@@ -118,7 +118,7 @@ update_custom_components() {
         echo "[AuraOS] AuraOS scripts: $inst_auraos → $latest_auraos"
         local base_url="https://raw.githubusercontent.com/adri6412/aura-os/${latest_auraos}/config/includes.chroot/usr/local/sbin"
         local ok=true
-        for script in auraos-update auraos-unlock auraos-lock auraos-status auraos-reset auraos-check-updates; do
+        for script in auraos-update auraos-unlock auraos-lock auraos-status auraos-reset auraos-check-updates auraos-switch; do
             if curl -fsSL --max-time 30 "${base_url}/${script}" \
                     -o "$LOWER/usr/local/sbin/${script}.new" 2>/dev/null; then
                 mv "$LOWER/usr/local/sbin/${script}.new" "$LOWER/usr/local/sbin/${script}"
@@ -129,6 +129,24 @@ update_custom_components() {
                 ok=false
             fi
         done
+        # Aggiorna anche i profili
+        local profiles_url="https://raw.githubusercontent.com/adri6412/aura-os/${latest_auraos}/config/includes.chroot/etc/auraos/profiles"
+        local profiles_index
+        profiles_index=$(curl -sf --max-time 10 \
+            "https://api.github.com/repos/adri6412/aura-os/contents/config/includes.chroot/etc/auraos/profiles?ref=${latest_auraos}" \
+            | python3 -c "import sys,json; [print(f['name']) for f in json.load(sys.stdin) if f['name'].endswith('.profile')]" \
+            2>/dev/null || echo "")
+        if [[ -n "$profiles_index" ]]; then
+            mkdir -p "$LOWER/etc/auraos/profiles"
+            while IFS= read -r pfile; do
+                curl -fsSL --max-time 30 "${profiles_url}/${pfile}" \
+                    -o "$LOWER/etc/auraos/profiles/${pfile}.new" 2>/dev/null \
+                    && mv "$LOWER/etc/auraos/profiles/${pfile}.new" \
+                          "$LOWER/etc/auraos/profiles/${pfile}" \
+                    || rm -f "$LOWER/etc/auraos/profiles/${pfile}.new"
+            done <<< "$profiles_index"
+            echo "[AuraOS] Profili aggiornati."
+        fi
         if $ok; then
             sed -i "s/^AURAOS_VERSION=.*/AURAOS_VERSION=\"${latest_auraos}\"/" "$VERSIONS_FILE"
             echo "[AuraOS] Script auraos-* aggiornati a $latest_auraos."
