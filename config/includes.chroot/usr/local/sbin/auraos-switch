@@ -255,16 +255,33 @@ case "$CMD" in
                      cmd_info "$1" ;;
     apply)           [[ -n "${1:-}" ]] || { echo "Uso: auraos-switch apply <profilo>" >&2; exit 1; }
                      cmd_apply "$1" ;;
+    apply-from)
+        # Applicazione da file locale — usato dalla GUI (scarica senza root,
+        # poi chiama pkexec auraos-switch apply-from /tmp/file.profile).
+        [[ -n "${1:-}" ]] || { echo "Uso: auraos-switch apply-from <file.profile>" >&2; exit 1; }
+        SRC_FILE="$1"
+        [[ -f "$SRC_FILE" ]] || { echo "Errore: file non trovato: $SRC_FILE" >&2; exit 1; }
+        # Ricava l'id dal nome file (rimuove path, estensione e prefissi temp)
+        PROF_ID=$(basename "$SRC_FILE" .profile)
+        PROF_ID="${PROF_ID##auraos-}"
+        PROF_ID="${PROF_ID##tmp.}"
+        # Copia nella dir profili (lower layer se overlay attivo)
+        DEST_DIR="${TARGET}${PROFILES_DIR}"
+        mkdir -p "$DEST_DIR"
+        cp "$SRC_FILE" "$DEST_DIR/${PROF_ID}.profile"
+        cmd_apply "$PROF_ID"
+        ;;
     revert)          [[ -n "${1:-}" ]] || { echo "Uso: auraos-switch revert <profilo>" >&2; exit 1; }
                      cmd_revert "$1" ;;
     help|--help|-h)
-        echo "Uso: auraos-switch <comando> [profilo]"
+        echo "Uso: auraos-switch <comando> [profilo|file]"
         echo ""
         echo "Comandi:"
-        echo "  list              Elenca profili disponibili"
-        echo "  info <profilo>    Mostra dettagli profilo"
-        echo "  apply <profilo>   Applica profilo (richiede reboot)"
-        echo "  revert <profilo>  Ripristina stato default (richiede reboot)"
+        echo "  list                  Elenca profili disponibili"
+        echo "  info <profilo>        Mostra dettagli profilo"
+        echo "  apply <profilo>       Applica profilo locale (richiede reboot)"
+        echo "  apply-from <file>     Applica profilo da file scaricato (usato dalla GUI)"
+        echo "  revert <profilo>      Ripristina stato default (richiede reboot)"
         ;;
     *)  echo "Comando sconosciuto: $CMD. Usa 'auraos-switch help'." >&2; exit 1 ;;
 esac

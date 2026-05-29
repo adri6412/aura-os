@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AuraOS Manager
+Name[it]=Gestore AuraOS
+Comment=Gestione profili di sistema e aggiornamenti
+Comment[it]=Gestione profili di sistema e aggiornamenti
+Exec=auraos-manager
+Icon=system-software-update
+Terminal=false
+Categories=System;Settings;
+Keywords=auraos;profili;aggiornamenti;sistema;
+StartupNotify=true

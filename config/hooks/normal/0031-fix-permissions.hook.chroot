@@ -11,3 +11,5 @@ chmod +x /etc/initramfs-tools/scripts/init-bottom/auraos-overlayfs 2>/dev/null |
 chmod +x /etc/initramfs-tools/hooks/auraos-tools   2>/dev/null || true
 chmod +x /usr/local/sbin/auraos-check-updates      2>/dev/null || true
 chmod +x /usr/local/sbin/auraos-switch             2>/dev/null || true
+chmod +x /usr/local/bin/auraos-manager             2>/dev/null || true
+chmod +x /opt/auraos-manager/auraos_manager.py     2>/dev/null || true
