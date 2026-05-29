@@ -55,15 +55,15 @@ cat > /usr/share/applications/auraos-tools.desktop <<'EOF'
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=AuraOS System Info
-Name[it]=AuraOS Info Sistema
-Comment=Stato del filesystem immutabile e strumenti di sistema
-Exec=bash -c 'auraos-status; echo ""; read -p "Premi Invio per chiudere..."'
-Icon=system-run
-Terminal=true
-Categories=System;
-Keywords=immutable;overlay;auraos;sistema;
-StartupNotify=false
+Name=AuraOS Manager
+Name[it]=AuraOS Manager
+Comment=Gestione profili di sistema e aggiornamenti
+Exec=auraos-manager --page=system
+Icon=system-software-update
+Terminal=false
+Categories=System;Settings;
+Keywords=immutable;overlay;auraos;sistema;aggiornamenti;profili;
+StartupNotify=true
 EOF
 
 echo "=== [AuraOS] OverlayFS configurato OK ==="
