@@ -4,27 +4,50 @@
 LOWER="/run/aura-lower"
 RW="/run/aura-rw"
 
-if [ ! -d "$LOWER/usr" ]; then
+# ── Rilevamento overlay ───────────────────────────────────────────────────────
+# Non si affida a /run/aura-lower (il mount --move dall'initramfs può non
+# sopravvivere alla transizione systemd): usa findmnt sul tipo di filesystem.
+
+ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || true)
+
+if [ "$ROOT_FSTYPE" != "overlay" ]; then
     echo "[AuraOS] Modalità: READ-WRITE (overlay non attivo — boot normale o recovery)"
     exit 0
 fi
 
-LOWER_STATE=$(grep " $LOWER " /proc/mounts | awk '{print $4}' | tr ',' '\n' | grep -E "^ro$|^rw$" | head -1)
+# ── Assicura che il lower layer sia accessibile ───────────────────────────────
+# Se mount --move non ha trasferito il mount, lo montiamo ora in sola lettura.
+if [ ! -d "$LOWER/usr" ]; then
+    ROOT_DEV=$(blkid -L "AuraOS" 2>/dev/null || true)
+    if [ -n "$ROOT_DEV" ]; then
+        mkdir -p "$LOWER"
+        mount -o ro "$ROOT_DEV" "$LOWER" 2>/dev/null || true
+    fi
+fi
 
-if [ -f /run/aura-persistent ]; then
-    DATA_DEV=$(grep " $RW " /proc/mounts | awk '{print $1}')
+LOWER_STATE="?"
+if [ -d "$LOWER/usr" ]; then
+    LOWER_STATE=$(grep " $LOWER " /proc/mounts \
+        | awk '{print $4}' | tr ',' '\n' | grep -E "^ro$|^rw$" | head -1)
+fi
+
+# ── Tipo di overlay: persistente (ext4) o temporaneo (tmpfs) ─────────────────
+RW_FSTYPE=$(findmnt -n -o FSTYPE "$RW" 2>/dev/null || true)
+
+if [ "$RW_FSTYPE" = "ext4" ]; then
+    DATA_DEV=$(findmnt -n -o SOURCE "$RW" 2>/dev/null || true)
     DATA_USED=$(df -h "$RW" 2>/dev/null | awk 'NR==2{print $3 " / " $2}')
-    SUBDIR=$(grep OVERLAY_SUBDIR /run/aura-lower/etc/auraos/overlay.conf 2>/dev/null \
-             | cut -d= -f2 | tr -d '"')
-    UPPER_FILES=$(find "$RW/${SUBDIR:-.auraos-overlay}/upper" -maxdepth 0 2>/dev/null && \
-                  find "$RW/${SUBDIR:-.auraos-overlay}/upper" 2>/dev/null | wc -l || echo "?")
+    SUBDIR=$(grep OVERLAY_SUBDIR "$LOWER/etc/auraos/overlay.conf" 2>/dev/null \
+             | cut -d= -f2 | tr -d '"' || echo ".auraos-overlay")
+    UPPER_FILES=$(find "$RW/${SUBDIR}/.auraos-overlay/upper" "$RW/${SUBDIR}/upper" \
+                  2>/dev/null | wc -l || echo "?")
 
     echo "[AuraOS] Modalità: IMMUTABILE — overlay PERSISTENTE su disco"
     echo ""
-    echo "  Root base (lower) : /run/aura-lower  [$LOWER_STATE]"
-    echo "  Partizione dati   : $DATA_DEV"
-    echo "  Spazio usato/tot  : $DATA_USED"
-    echo "  File modificati   : $UPPER_FILES (nella sessione corrente + precedenti)"
+    echo "  Root base (lower) : $LOWER  [${LOWER_STATE:-?}]"
+    echo "  Partizione dati   : ${DATA_DEV:-?}"
+    echo "  Spazio usato/tot  : ${DATA_USED:-?}"
+    echo "  File modificati   : $UPPER_FILES"
 else
     UPPER_USED=$(du -sh "$RW/upper" 2>/dev/null | cut -f1)
     TMPFS_FREE=$(df -h "$RW" 2>/dev/null | awk 'NR==2{print $4}')
@@ -33,10 +56,8 @@ else
     echo "  ATTENZIONE: nessuna partizione dati configurata."
     echo "  Le modifiche di questa sessione saranno perse al riavvio."
     echo ""
-    echo "  Root base (lower) : /run/aura-lower  [$LOWER_STATE]"
+    echo "  Root base (lower) : $LOWER  [${LOWER_STATE:-?}]"
     echo "  Tmpfs usato       : ${UPPER_USED:-?} | libero: ${TMPFS_FREE:-?}"
-    echo ""
-    echo "  Per abilitare la persistenza: impostare OVERLAY_UUID in /etc/auraos/overlay.conf"
 fi
 
 echo ""

@@ -1,12 +1,24 @@
 #!/bin/bash
 # auraos-unlock — sblocca temporaneamente il root reale in scrittura.
-# Usare per installare software manualmente; richiede auraos-lock al termine.
-# ATTENZIONE: le modifiche vanno al root reale e sopravvivono ai riavvii.
 
 [[ $EUID -ne 0 ]] && { echo "Errore: eseguire come root (sudo auraos-unlock)." >&2; exit 1; }
 
 LOWER="/run/aura-lower"
-[ ! -d "$LOWER/usr" ] && { echo "[AuraOS] Overlay non attivo."; exit 1; }
+
+# Rilevamento overlay via findmnt (non si affida a /run/aura-lower)
+ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || true)
+if [ "$ROOT_FSTYPE" != "overlay" ]; then
+    echo "[AuraOS] Overlay non attivo — sistema già in modalità read-write."
+    exit 1
+fi
+
+# Monta il lower layer se non è già accessibile
+if [ ! -d "$LOWER/usr" ]; then
+    ROOT_DEV=$(blkid -L "AuraOS" 2>/dev/null || true)
+    [ -z "$ROOT_DEV" ] && { echo "[AuraOS] Errore: partizione root (LABEL=AuraOS) non trovata." >&2; exit 1; }
+    mkdir -p "$LOWER"
+    mount -o ro "$ROOT_DEV" "$LOWER" || { echo "[AuraOS] Errore: impossibile montare $ROOT_DEV." >&2; exit 1; }
+fi
 
 mount -o remount,rw "$LOWER"
 echo "[AuraOS] Root sbloccato (read-write)."

@@ -9,12 +9,27 @@ set -e
 
 LOWER="/run/aura-lower"
 
-# Se l'overlay non è attivo (boot normale o recovery), usa apt direttamente
-if [ ! -d "$LOWER/usr" ]; then
+# Rilevamento overlay via findmnt (non si affida a /run/aura-lower)
+ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || true)
+
+if [ "$ROOT_FSTYPE" != "overlay" ]; then
     echo "[AuraOS] Overlay non attivo — aggiornamento diretto."
     apt-get update
     apt-get upgrade -y
     exit $?
+fi
+
+# Monta il lower layer se non è già accessibile dopo la transizione initramfs→systemd
+if [ ! -d "$LOWER/usr" ]; then
+    ROOT_DEV=$(blkid -L "AuraOS" 2>/dev/null || true)
+    if [ -n "$ROOT_DEV" ]; then
+        mkdir -p "$LOWER"
+        mount -o ro "$ROOT_DEV" "$LOWER" \
+            || { echo "[AuraOS] Errore: impossibile montare $ROOT_DEV." >&2; exit 1; }
+    else
+        echo "[AuraOS] Errore: partizione root (LABEL=AuraOS) non trovata." >&2
+        exit 1
+    fi
 fi
 
 echo "[AuraOS] ========================================"

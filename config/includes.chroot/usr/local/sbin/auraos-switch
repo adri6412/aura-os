@@ -17,8 +17,17 @@ PROFILES_DIR="/etc/auraos/profiles"
 ACTIVE_FILE="/etc/auraos/active-profiles.conf"
 LOWER="/run/aura-lower"
 
-# Se overlay attivo, opera su lower layer; altrimenti opera direttamente
-if [[ -d "$LOWER/usr" ]]; then
+# Rilevamento overlay via findmnt; monta lower layer se necessario
+ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || true)
+if [[ "$ROOT_FSTYPE" == "overlay" ]] && [[ ! -d "$LOWER/usr" ]]; then
+    ROOT_DEV=$(blkid -L "AuraOS" 2>/dev/null || true)
+    if [[ -n "$ROOT_DEV" ]]; then
+        mkdir -p "$LOWER"
+        mount -o ro "$ROOT_DEV" "$LOWER" 2>/dev/null || true
+    fi
+fi
+
+if [[ "$ROOT_FSTYPE" == "overlay" ]] && [[ -d "$LOWER/usr" ]]; then
     TARGET="$LOWER"
     OVERLAY_ACTIVE=true
 else
