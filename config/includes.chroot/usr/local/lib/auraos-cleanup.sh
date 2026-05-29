@@ -109,6 +109,14 @@ fi
 install -d /etc/auraos
 
 if [ -n "$OVERLAY_UUID" ]; then
+    # Ridimensiona il filesystem della partizione dati a tutta la partizione.
+    # Necessario se la partizione è stata espansa dopo la formattazione.
+    DATA_DEV=$(blkid -U "$OVERLAY_UUID" 2>/dev/null || true)
+    if [ -n "$DATA_DEV" ]; then
+        log "Ridimensionamento filesystem $DATA_DEV alla dimensione della partizione..."
+        resize2fs "$DATA_DEV" 2>>"$LOG" && log "resize2fs OK" || log "WARN: resize2fs fallito (non critico)"
+    fi
+
     cat > /etc/auraos/overlay.conf <<EOF
 # AuraOS — configurazione overlay persistente
 # Generato da Calamares durante l'installazione. Non modificare.
