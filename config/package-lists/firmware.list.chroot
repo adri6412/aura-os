@@ -1,0 +1,24 @@
+# Firmware hardware — necessari per WiFi, Bluetooth, GPU e driver periferiche
+
+# Intel — WiFi (iwlwifi) + Bluetooth (ibt-* per AX200/AX201/AX210 e simili)
+firmware-iwlwifi
+firmware-intel
+
+# Firmware generico Linux (copre la maggior parte dell'hardware comune)
+firmware-linux
+firmware-linux-nonfree
+
+# AMD/ATI GPU (per eventuali sistemi con grafica AMD)
+firmware-amd-graphics
+
+# Realtek — schede di rete e WiFi USB comuni
+firmware-realtek
+
+# Atheros — WiFi e Bluetooth
+firmware-atheros
+
+# MediaTek — WiFi USB (comuni su laptop budget)
+firmware-mediatek
+
+# Microcircuiti vari (touchpad, sensori, controller)
+firmware-misc-nonfree
