@@ -1,8 +1,8 @@
 # Firmware hardware — necessari per WiFi, Bluetooth, GPU e driver periferiche
 
-# Intel — WiFi (iwlwifi) + Bluetooth (ibt-* per AX200/AX201/AX210 e simili)
+# Intel — WiFi (iwlwifi) + Bluetooth ibt-* (AX200/AX201/AX210)
+# I file ibt-* per il Bluetooth sono in firmware-linux-nonfree su Trixie
 firmware-iwlwifi
-firmware-intel
 
 # Firmware generico Linux (copre la maggior parte dell'hardware comune)
 firmware-linux
