@@ -28,4 +28,5 @@ lb config noauto \
     --memtest none \
     --win32-loader false \
     --image-name "auraos-1.0-amd64" \
+    --compression lz4 \
     "${@}"
