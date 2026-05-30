@@ -194,13 +194,19 @@ else
 
     lb clean --binary 2>/dev/null || true
 
-    if [[ -d chroot/usr ]]; then
-        chroot chroot dpkg-query -W > chroot.packages.live 2>/dev/null || true
+    # lb clean --binary rimuove chroot.packages.live — lo ricreiamo subito.
+    # Usiamo dpkg-query --admindir per leggere il db direttamente senza chroot.
+    if [[ -d chroot/var/lib/dpkg ]]; then
+        dpkg-query -W --admindir=chroot/var/lib/dpkg \
+            > chroot.packages.live 2>/dev/null || touch chroot.packages.live
         cp chroot.packages.live chroot.packages.install 2>/dev/null || true
-        chroot chroot dpkg-query -W \
+        dpkg-query -W --admindir=chroot/var/lib/dpkg \
             --showformat='${Package}:${Architecture}\t${Version}\n' \
             > chroot.packages-arch.live 2>/dev/null || true
         find chroot -printf '%P\n' 2>/dev/null | sort > chroot.files || true
+        ok "chroot.packages.live ricreato ($(wc -l < chroot.packages.live) pacchetti)"
+    else
+        warn "chroot non trovato — skip manifest"
     fi
 
     bash auto/config
