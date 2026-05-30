@@ -62,7 +62,7 @@ libxfixes3
 rsync
 
 # Dipendenze Ivanti/Pulse Secure VPN
-libgtkmm-3.0-1v5
+libgtkmm-3.0-1t64
 libcurl4t64
 libnss3-tools
 acl

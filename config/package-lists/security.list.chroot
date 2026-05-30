@@ -20,5 +20,4 @@ apparmor-profiles-extra
 apparmor-utils
 usbguard
 firejail
-firejail-profiles
 lynis
