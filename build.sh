@@ -118,12 +118,28 @@ if [[ "$MODE" == "binary" ]] && ! $CHROOT_OK; then
     MODE="chroot"
 fi
 
+
+# Exclude comuni per rsync: preserva artefatti di build generati da live-build
+RSYNC_EXCLUDES=(
+    --exclude='cache/'
+    --exclude='chroot/'
+    --exclude='binary/'
+    --exclude='.build/'
+    --exclude='*.iso'
+    --exclude='build/'
+    --exclude='output/'
+    --exclude='build.sh'
+    --exclude='chroot.packages*'
+    --exclude='chroot.files'
+    --exclude='chroot-binary.packages*'
+)
+
 if [[ "$MODE" == "clean" ]]; then
     log "Rimozione completa directory di build..."
     rm -rf "$NATIVE_BUILD_DIR"
     mkdir -p "$NATIVE_BUILD_DIR"
     rsync -aH \
-        --exclude='build/' --exclude='output/' --exclude='*.iso' --exclude='build.sh' \
+        "${RSYNC_EXCLUDES[@]}" \
         "$SCRIPT_DIR/" "$NATIVE_BUILD_DIR/"
     cd "$NATIVE_BUILD_DIR"
     ok "Directory di build pronta"
@@ -141,9 +157,7 @@ if [[ "$MODE" == "clean" ]]; then
 elif [[ "$MODE" == "chroot" ]]; then
     log "Sync configurazione (cache bootstrap/pacchetti preservata)..."
     rsync -aH --delete \
-        --exclude='cache/' --exclude='chroot/' --exclude='binary/' \
-        --exclude='.build/' --exclude='*.iso' \
-        --exclude='build/' --exclude='output/' --exclude='build.sh' \
+        "${RSYNC_EXCLUDES[@]}" \
         "$SCRIPT_DIR/" "$NATIVE_BUILD_DIR/"
     cd "$NATIVE_BUILD_DIR"
     log "Pulizia chroot e binary (cache preservata)..."
@@ -168,9 +182,7 @@ elif [[ "$MODE" == "chroot" ]]; then
 else
     log "Sync config nel build dir..."
     rsync -aH --delete \
-        --exclude='cache/' --exclude='chroot/' --exclude='binary/' \
-        --exclude='.build/' --exclude='*.iso' \
-        --exclude='build/' --exclude='output/' --exclude='build.sh' \
+        "${RSYNC_EXCLUDES[@]}" \
         "$SCRIPT_DIR/" "$NATIVE_BUILD_DIR/"
     cd "$NATIVE_BUILD_DIR"
 
