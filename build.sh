@@ -186,12 +186,6 @@ else
         "$SCRIPT_DIR/" "$NATIVE_BUILD_DIR/"
     cd "$NATIVE_BUILD_DIR"
 
-    if [[ -d config/includes.chroot ]]; then
-        log "Sync includes.chroot → chroot/..."
-        rsync -aH config/includes.chroot/ chroot/
-        ok "File aggiornati nel chroot"
-    fi
-
     lb clean --binary 2>/dev/null || true
 
     # lb clean --binary rimuove chroot.packages.live — lo ricreiamo subito.
