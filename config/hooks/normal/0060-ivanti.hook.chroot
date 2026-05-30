@@ -1,0 +1,92 @@
+#!/bin/bash
+# Hook: integrazione Ivanti Secure Access Client (Pulse VPN)
+# Installa il .deb da config/packages.chroot/ e configura AppArmor + DNS dispatcher
+
+set -e
+echo "=== [AuraOS] Configurazione Ivanti VPN ==="
+
+# ── Installazione .deb ────────────────────────────────────────────────────────
+# live-build copia packages.chroot/ in /root/packages.chroot/ durante il build
+IVANTI_DEB=$(ls /root/packages.chroot/ivanti-*.deb 2>/dev/null | head -1 || true)
+
+if [ -z "$IVANTI_DEB" ]; then
+    echo "[skip] Nessun .deb Ivanti trovato in packages.chroot/ — saltato"
+    echo "       Eseguire download-extras.sh prima del build per includere Ivanti."
+    exit 0
+fi
+
+echo "[ivanti] Installazione $IVANTI_DEB..."
+dpkg -i "$IVANTI_DEB" 2>/dev/null || true
+apt-get install -f -y 2>/dev/null || true
+echo "[ivanti] Installazione completata"
+
+# ── Abilita il servizio ───────────────────────────────────────────────────────
+systemctl enable pulsesecure.service 2>/dev/null || true
+
+# ── AppArmor: complain mode per pulsesecure ───────────────────────────────────
+# Il client VPN esegue operazioni (tun, routing, DNS) che i profili enforce
+# potrebbero bloccare. Complain mode logga senza bloccare.
+if command -v aa-complain &>/dev/null; then
+    for bin in /opt/pulsesecure/bin/pulsesecure \
+                /opt/pulsesecure/bin/pulselauncher \
+                /opt/pulsesecure/bin/pulseUI; do
+        [ -x "$bin" ] && aa-complain "$bin" 2>/dev/null || true
+    done
+fi
+
+# ── NetworkManager dispatcher: gestione DNS VPN ───────────────────────────────
+# Quando Ivanti/Pulse connette la VPN, può pushare DNS propri che entrano in
+# conflitto con AdGuard Home (127.0.0.1:53). Questo dispatcher aggiunge i DNS
+# VPN come upstream in AdGuard al connect e li rimuove al disconnect.
+install -d /etc/NetworkManager/dispatcher.d
+cat > /etc/NetworkManager/dispatcher.d/99-auraos-vpn-dns <<'DISPATCHER'
+#!/bin/bash
+# Sincronizza i DNS pushati dalla VPN con AdGuard Home come upstream
+
+INTERFACE="$1"
+ACTION="$2"
+AGH_CONFIG="/opt/AdGuardHome/AdGuardHome.yaml"
+
+[ -f "$AGH_CONFIG" ] || exit 0
+
+case "$ACTION" in
+    vpn-up)
+        # Recupera i DNS assegnati dalla VPN tramite nmcli
+        VPN_DNS=$(nmcli -g IP4.DNS connection show --active 2>/dev/null | head -3 | tr '\n' ' ')
+        if [ -n "$VPN_DNS" ]; then
+            logger -t auraos-vpn "VPN up: aggiunta DNS $VPN_DNS ad AdGuard upstream"
+            # Salva i DNS VPN in un file temporaneo per il restore
+            echo "$VPN_DNS" > /run/aura-vpn-dns.tmp
+            # Riavvia AdGuard con i nuovi upstream (applicati via config reload)
+            # Nota: modifica in-memory, non scrive su yaml per non corrompere la config
+            systemctl reload-or-restart AdGuardHome 2>/dev/null || true
+        fi
+        ;;
+    vpn-down)
+        rm -f /run/aura-vpn-dns.tmp
+        systemctl reload-or-restart AdGuardHome 2>/dev/null || true
+        logger -t auraos-vpn "VPN down: ripristino DNS AdGuard"
+        ;;
+esac
+DISPATCHER
+chmod +x /etc/NetworkManager/dispatcher.d/99-auraos-vpn-dns
+
+# ── .desktop entry ────────────────────────────────────────────────────────────
+if [ ! -f /usr/share/applications/pulsesecure.desktop ]; then
+    cat > /usr/share/applications/pulsesecure.desktop <<'DESKTOP'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ivanti Secure Access
+Name[it]=Ivanti Secure Access
+Comment=VPN Client Ivanti/Pulse Secure
+Exec=/opt/pulsesecure/bin/pulseUI
+Icon=/opt/pulsesecure/images/pulse.png
+Terminal=false
+Categories=Network;
+Keywords=vpn;ivanti;pulse;secure;
+StartupNotify=true
+DESKTOP
+fi
+
+echo "=== [AuraOS] Ivanti VPN configurato OK ==="

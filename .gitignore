@@ -16,3 +16,6 @@ chroot.packages.*
 # Hook live-build auto-generati da lb config (symlink assoluti verso /usr/share/live/build/)
 config/hooks/live/
 config/hooks/normal/[1-9]*.hook.chroot
+
+# Pacchetti .deb di terze parti (scaricare con download-extras.sh prima del build)
+config/packages.chroot/*.deb

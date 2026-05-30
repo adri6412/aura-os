@@ -61,5 +61,11 @@ libxfixes3
 # rsync — usato da Backup Sicuro per copie incrementali
 rsync
 
+# Dipendenze Ivanti/Pulse Secure VPN
+libgtkmm-3.0-1v5
+libcurl4t64
+libnss3-tools
+acl
+
 # GdkPixbuf — thumbnail foto (solitamente già presente con GTK4)
 gir1.2-gdkpixbuf-2.0
