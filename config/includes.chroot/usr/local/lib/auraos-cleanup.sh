@@ -114,6 +114,7 @@ if [ -n "$OVERLAY_UUID" ]; then
     DATA_DEV=$(blkid -U "$OVERLAY_UUID" 2>/dev/null || true)
     if [ -n "$DATA_DEV" ]; then
         log "Ridimensionamento filesystem $DATA_DEV alla dimensione della partizione..."
+        e2fsck -f -y "$DATA_DEV" 2>>"$LOG" || true
         resize2fs "$DATA_DEV" 2>>"$LOG" && log "resize2fs OK" || log "WARN: resize2fs fallito (non critico)"
     fi
 
