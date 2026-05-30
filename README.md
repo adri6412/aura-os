@@ -2,19 +2,37 @@
 
 AuraOS è una distribuzione Linux live/installabile basata su **Debian 13 (Trixie)**, costruita con [live-build](https://live-team.pages.debian.net/live-manual/).
 
-Progettata per essere sicura, semplice e con filesystem immutabile tramite OverlayFS.
+Progettata per essere sicura, privata e con filesystem immutabile tramite OverlayFS.
 
 ---
 
 ## Caratteristiche
 
-- **Filesystem immutabile** — root in sola lettura con OverlayFS; le modifiche vanno su una partizione dati separata (`auraos-data`) e sopravvivono ai riavvii
-- **Desktop GNOME** con tema macOS e estensioni personalizzate
-- **Installer grafico** Calamares integrato nel live (sessione kiosk)
-- **AdGuard Home** preconfigurato come filtro DNS locale (anti-pubblicità/malware)
-- **Protezione** — UFW, ClamAV, Fail2Ban, rkhunter attivi di default
-- **Vivaldi** come browser predefinito
-- **RustDesk** per assistenza remota
+### Filesystem immutabile
+- Root in sola lettura con OverlayFS; le modifiche persistono su una partizione dati separata (`auraos-data`) e sopravvivono ai riavvii
+- Reset completo alle impostazioni di fabbrica con un comando
+
+### Sicurezza
+- **Kernel hardening** — ASLR massimo, kptr_restrict, ptrace_scope, TCP SYN cookies, blocco ICMP redirect/source routing, rp_filter
+- **AppArmor** — abilitato in enforce mode con profili per browser e applicazioni
+- **Firejail** — sandbox per Vivaldi e Thunderbird
+- **USBGuard** — controllo accesso dispositivi USB
+- **AdGuard Home** — filtro DNS locale con DNSSEC, DoH upstream, blocco malware/pubblicità
+- **UFW** — firewall con policy default-deny incoming
+- **ClamAV** — antivirus con aggiornamento automatico definizioni
+- **Fail2Ban** + **rkhunter** — intrusion prevention e rilevamento rootkit
+- **unattended-upgrades** — aggiornamenti di sicurezza automatici
+
+### Desktop
+- **GNOME 46** con tema macOS (WhiteSur), Dash-to-Dock, Blur-My-Shell
+- **Vivaldi** come browser predefinito (hardened: HTTPS-only, Safe Browsing, blocco popup/notifiche/geolocalizzazione)
+- **Thunderbird** con telemetry disabilitata
+- **LibreOffice**, **VLC**, GNOME Software + Flatpak
+
+### Strumenti AuraOS
+- **AuraOS Manager** — app GTK4 per gestione profili, aggiornamenti, stato sistema e **dashboard di sicurezza**
+- `auraos-status/unlock/lock/update/reset` — gestione overlay da terminale
+- `auraos-security-audit` — audit Lynis con score salvato in cache
 
 ---
 
@@ -71,13 +89,14 @@ aura-os/
 └── config/
     ├── bootloaders/              # GRUB (EFI) e Syslinux (BIOS) custom
     ├── hooks/
-    │   ├── normal/               # Hook chroot personalizzati (0010-0045)
-    │   └── binary/               # Hook binary (symlink, permessi)
+    │   ├── normal/               # Hook chroot (0010 base, 0045 overlay, 0050 hardening)
+    │   └── binary/               # Hook binary stage
     ├── includes.chroot/          # File copiati direttamente nella ISO
     │   ├── etc/calamares/        # Configurazione installer Calamares
+    │   ├── etc/sysctl.d/         # Kernel hardening parameters
     │   ├── etc/systemd/          # Servizi systemd custom
-    │   ├── lib/live/config/      # Hook live-config (avvio sessione)
-    │   ├── usr/local/sbin/       # Strumenti auraos-* (update/lock/unlock)
+    │   ├── opt/auraos-manager/   # AuraOS Manager (GTK4)
+    │   ├── usr/local/sbin/       # Strumenti auraos-* (update/lock/unlock/audit)
     │   └── etc/initramfs-tools/  # Script OverlayFS nell'initramfs
     └── package-lists/            # Liste pacchetti apt
 ```
@@ -94,15 +113,16 @@ upper  = partizione auraos-data/.auraos-overlay/upper  (modifiche persistenti)
 merged = / (quello che l'utente vede)
 ```
 
-### Strumenti di gestione
+### Strumenti di gestione overlay
 
 | Comando | Descrizione |
 |---|---|
 | `sudo auraos-status` | Mostra stato overlay (persistente/tmpfs) |
 | `sudo auraos-unlock` | Sblocca il root reale in scrittura |
 | `sudo auraos-lock`   | Torna in sola lettura |
-| `sudo auraos-update` | Aggiorna il sistema (sblocca, apt upgrade, ribloccca) |
+| `sudo auraos-update` | Aggiorna il sistema (sblocca, apt upgrade, riblocca) |
 | `sudo auraos-reset`  | Cancella l'upper layer (reset alle impostazioni di fabbrica) |
+| `sudo auraos-security-audit` | Esegue audit Lynis e salva lo score |
 
 ---
 
@@ -111,7 +131,7 @@ merged = / (quello che l'utente vede)
 | Partizione | Dimensione | Tipo | Etichetta |
 |---|---|---|---|
 | EFI | 800 MiB | FAT32 | EFI |
-| Root | 15 GiB | ext4 | AuraOS |
+| Root | 10 GiB | ext4 | AuraOS |
 | Dati overlay | Spazio rimanente | ext4 | auraos-data |
 
 ---
