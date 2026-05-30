@@ -27,6 +27,10 @@ dconf update 2>/dev/null || true
 update-desktop-database /usr/share/applications/ 2>/dev/null || true
 update-mime-database /usr/share/mime/ 2>/dev/null || true
 
+# --- Desktop files eseguibili ---
+chmod +x /etc/skel/Desktop/*.desktop 2>/dev/null || true
+chmod +x /usr/local/bin/trust-desktop-files.sh 2>/dev/null || true
+
 # --- Servizi di sicurezza ---
 systemctl enable clamav-daemon 2>/dev/null || true
 systemctl enable clamav-freshclam 2>/dev/null || true
