@@ -12,3 +12,13 @@ apt-listchanges
 # Firewall e rete
 fail2ban
 rkhunter
+
+# Hardening avanzato
+apparmor
+apparmor-profiles
+apparmor-profiles-extra
+apparmor-utils
+usbguard
+firejail
+firejail-profiles
+lynis

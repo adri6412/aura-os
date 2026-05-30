@@ -372,6 +372,201 @@ class UpdatesPage(Gtk.Box):
             self._version_rows[key].set_subtitle(f"Installata: {ver}")
 
 
+# ── Tab Sicurezza ─────────────────────────────────────────────────────────────
+
+BIN_SECURITY_AUDIT = "/usr/local/sbin/auraos-security-audit"
+LYNIS_CACHE        = "/var/cache/auraos/lynis-score.cache"
+
+SECURITY_SERVICES = [
+    ("ufw",           "Firewall (UFW)",    "network-firewall-symbolic"),
+    ("clamav-daemon", "Antivirus ClamAV",  "security-medium-symbolic"),
+    ("AdGuardHome",   "AdGuard Home DNS",  "network-wireless-symbolic"),
+    ("apparmor",      "AppArmor",          "security-high-symbolic"),
+    ("usbguard",      "USBGuard",          "drive-removable-media-symbolic"),
+    ("fail2ban",      "Fail2Ban",          "dialog-warning-symbolic"),
+]
+
+
+def _service_active(name):
+    try:
+        r = subprocess.run(
+            ["systemctl", "is-active", name],
+            capture_output=True, text=True, timeout=3
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _count_upgradable():
+    try:
+        r = subprocess.run(
+            ["apt", "list", "--upgradable"],
+            capture_output=True, text=True, timeout=15
+        )
+        lines = [l for l in r.stdout.splitlines() if "/" in l]
+        return len(lines)
+    except Exception:
+        return -1
+
+
+def _read_lynis_cache():
+    score, date = None, None
+    try:
+        with open(LYNIS_CACHE) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("SCORE="):
+                    score = int(line.split("=", 1)[1])
+                elif line.startswith("DATE="):
+                    date = line.split("=", 1)[1]
+    except Exception:
+        pass
+    return score, date
+
+
+class SecurityPage(Gtk.Box):
+    def __init__(self, win):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.win = win
+        self._service_rows = {}
+
+        toolbar = Adw.HeaderBar()
+        toolbar.set_show_end_title_buttons(False)
+        refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic",
+                                 tooltip_text="Aggiorna")
+        refresh_btn.connect("clicked", lambda *_: self._load())
+        toolbar.pack_end(refresh_btn)
+        self.append(toolbar)
+
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
+                          margin_top=12, margin_bottom=12,
+                          margin_start=12, margin_end=12)
+        scroll.set_child(content)
+        self.append(scroll)
+
+        # ── Servizi ──
+        svc_group = Adw.PreferencesGroup(title="Servizi di sicurezza")
+        content.append(svc_group)
+        for svc_id, label, icon in SECURITY_SERVICES:
+            row = Adw.ActionRow(title=label)
+            status_lbl = Gtk.Label(label="…", valign=Gtk.Align.CENTER,
+                                   css_classes=["dim-label"])
+            row.add_suffix(status_lbl)
+            svc_group.add(row)
+            self._service_rows[svc_id] = status_lbl
+
+        # ── Aggiornamenti ──
+        upd_group = Adw.PreferencesGroup(title="Aggiornamenti di sicurezza",
+                                         margin_top=8)
+        content.append(upd_group)
+        self._upd_row = Adw.ActionRow(title="Pacchetti aggiornabili")
+        self._upd_lbl = Gtk.Label(label="…", valign=Gtk.Align.CENTER,
+                                  css_classes=["dim-label"])
+        self._upd_row.add_suffix(self._upd_lbl)
+        upd_group.add(self._upd_row)
+
+        # ── Lynis Score ──
+        lynis_group = Adw.PreferencesGroup(title="Lynis Security Score",
+                                           margin_top=8)
+        content.append(lynis_group)
+
+        score_row = Adw.ActionRow(title="Hardening Index")
+        self._score_lbl = Gtk.Label(label="—", valign=Gtk.Align.CENTER)
+        score_row.add_suffix(self._score_lbl)
+        lynis_group.add(score_row)
+
+        self._progress = Gtk.LevelBar(min_value=0, max_value=100,
+                                      margin_top=4, margin_bottom=4,
+                                      margin_start=12, margin_end=12)
+        self._progress.add_offset_value("low",    40)
+        self._progress.add_offset_value("middle", 70)
+        self._progress.add_offset_value("full",  100)
+        lynis_group.add(self._progress)
+
+        self._date_lbl = Gtk.Label(label="Nessun audit eseguito",
+                                   css_classes=["dim-label", "caption"],
+                                   halign=Gtk.Align.START,
+                                   margin_start=12, margin_bottom=4)
+        content.append(self._date_lbl)
+
+        audit_btn = Gtk.Button(label="Esegui audit",
+                               css_classes=["pill"],
+                               halign=Gtk.Align.CENTER, margin_top=4)
+        audit_btn.connect("clicked", self._on_audit)
+        content.append(audit_btn)
+        self._audit_btn = audit_btn
+
+        self._load()
+
+    def _load(self):
+        threading.Thread(target=self._fetch, daemon=True).start()
+
+    def _fetch(self):
+        statuses = {svc: _service_active(svc) for svc, _, _ in SECURITY_SERVICES}
+        upgradable = _count_upgradable()
+        score, date = _read_lynis_cache()
+        GLib.idle_add(self._update_ui, statuses, upgradable, score, date)
+
+    def _update_ui(self, statuses, upgradable, score, date):
+        for svc_id, active in statuses.items():
+            lbl = self._service_rows.get(svc_id)
+            if lbl:
+                lbl.set_text("Attivo" if active else "Inattivo")
+                lbl.set_css_classes(["success"] if active else ["error"])
+
+        if upgradable < 0:
+            self._upd_lbl.set_text("N/D")
+        elif upgradable == 0:
+            self._upd_lbl.set_text("Sistema aggiornato")
+            self._upd_lbl.set_css_classes(["success"])
+        else:
+            self._upd_lbl.set_text(f"{upgradable} disponibili")
+            self._upd_lbl.set_css_classes(["warning"])
+
+        if score is not None:
+            self._score_lbl.set_text(f"{score}/100")
+            css = "success" if score >= 70 else ("warning" if score >= 50 else "error")
+            self._score_lbl.set_css_classes([css])
+            self._progress.set_value(score)
+            self._date_lbl.set_text(f"Ultimo audit: {date or '—'}")
+        else:
+            self._score_lbl.set_text("—")
+            self._progress.set_value(0)
+
+    def _on_audit(self, btn):
+        dialog = Adw.AlertDialog(
+            heading="Eseguire audit di sicurezza?",
+            body="Lynis analizzerà il sistema e produrrà un punteggio.\n"
+                 "L'operazione richiede 1-2 minuti e password amministratore."
+        )
+        dialog.add_response("cancel", "Annulla")
+        dialog.add_response("ok", "Avvia")
+        dialog.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
+        dialog.connect("response", self._on_confirm_audit)
+        dialog.present(self.win)
+
+    def _on_confirm_audit(self, dialog, response):
+        if response != "ok":
+            return
+        self._audit_btn.set_sensitive(False)
+        self.win.show_progress("Audit Lynis in corso…")
+        threading.Thread(target=self._do_audit, daemon=True).start()
+
+    def _do_audit(self):
+        rc = run_privileged([BIN_SECURITY_AUDIT])
+        GLib.idle_add(self._after_audit, rc)
+
+    def _after_audit(self, rc):
+        self.win.hide_progress()
+        self._audit_btn.set_sensitive(True)
+        if rc == 0:
+            self._load()
+        else:
+            self.win.show_error("Audit fallito. Controlla i log di sistema.")
+
+
 # ── Tab Sistema ───────────────────────────────────────────────────────────────
 
 class SystemPage(Gtk.Box):
@@ -481,6 +676,11 @@ class AuraOSManagerWindow(Adw.ApplicationWindow):
         system_page = SystemPage(self)
         self._stack.add_titled_with_icon(
             system_page, "system", "Sistema", "drive-harddisk-symbolic"
+        )
+
+        security_page = SecurityPage(self)
+        self._stack.add_titled_with_icon(
+            security_page, "security", "Sicurezza", "security-high-symbolic"
         )
 
         self._pulse_id = None

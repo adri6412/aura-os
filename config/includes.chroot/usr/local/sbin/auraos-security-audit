@@ -1,0 +1,46 @@
+#!/bin/bash
+# auraos-security-audit — esegue Lynis e salva lo score in cache
+# Richiede root (chiamato via pkexec dall'AuraOS Manager)
+
+set -e
+
+CACHE_DIR=/var/cache/auraos
+CACHE_FILE="$CACHE_DIR/lynis-score.cache"
+LOG_FILE=/var/log/auraos-lynis.log
+
+mkdir -p "$CACHE_DIR"
+
+if ! command -v lynis &>/dev/null; then
+    echo "ERRORE: lynis non installato" >&2
+    exit 1
+fi
+
+echo "AuraOS Security Audit — avvio Lynis..."
+echo "Questo richiede 1-2 minuti."
+echo ""
+
+# Esegue lynis e cattura l'output
+lynis audit system --quiet --no-colors 2>&1 | tee "$LOG_FILE"
+
+# Estrae l'Hardening Index dall'output
+SCORE=$(grep -oP 'Hardening index\s*:\s*\[\K[0-9]+' "$LOG_FILE" 2>/dev/null || \
+        grep -oP 'Hardening index \[\K[0-9]+' "$LOG_FILE" 2>/dev/null || \
+        echo "")
+
+if [ -z "$SCORE" ]; then
+    # Fallback: cerca in /var/log/lynis.log
+    SCORE=$(grep -oP 'Hardening index\s*:\s*\[\K[0-9]+' /var/log/lynis.log 2>/dev/null || \
+            grep -oP 'Hardening index \[\K[0-9]+' /var/log/lynis.log 2>/dev/null || \
+            echo "0")
+fi
+
+DATE=$(date -Iseconds)
+
+cat > "$CACHE_FILE" <<EOF
+SCORE=$SCORE
+DATE=$DATE
+EOF
+
+echo ""
+echo "Audit completato. Hardening Index: $SCORE/100"
+echo "Score salvato in $CACHE_FILE"

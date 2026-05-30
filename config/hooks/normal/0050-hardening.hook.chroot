@@ -1,0 +1,75 @@
+#!/bin/bash
+# Hook: hardening avanzato AuraOS — AppArmor, USBGuard, Firejail, sysctl
+
+set -e
+echo "=== [AuraOS] Hardening avanzato ==="
+
+# ── AppArmor ──────────────────────────────────────────────────────────────────
+echo "[hardening] Abilitazione AppArmor..."
+systemctl enable apparmor 2>/dev/null || true
+
+# Attiva enforce mode su tutti i profili disponibili
+if command -v aa-enforce &>/dev/null; then
+    aa-enforce /etc/apparmor.d/* 2>/dev/null || true
+fi
+
+# Aggiunge parametri AppArmor al cmdline GRUB dell'installazione
+GRUB_DEFAULT=/etc/default/grub
+if [ -f "$GRUB_DEFAULT" ]; then
+    if ! grep -q "apparmor=1" "$GRUB_DEFAULT"; then
+        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 apparmor=1 security=apparmor"/' \
+            "$GRUB_DEFAULT" 2>/dev/null || true
+    fi
+    update-grub 2>/dev/null || true
+fi
+
+# ── USBGuard ──────────────────────────────────────────────────────────────────
+echo "[hardening] Configurazione USBGuard..."
+systemctl enable usbguard 2>/dev/null || true
+
+# Policy di default: allow-all al primo avvio (l'utente può restringere poi)
+# Alla prima connessione di un nuovo dispositivo, USBGuard applica ImplicitPolicyTarget
+USBGUARD_CONF=/etc/usbguard/usbguard-daemon.conf
+if [ -f "$USBGUARD_CONF" ]; then
+    # Imposta allow come default per non bloccare l'utente al primo boot
+    sed -i 's/^ImplicitPolicyTarget=.*/ImplicitPolicyTarget=allow/' "$USBGUARD_CONF" 2>/dev/null || true
+    # Genera regola base per i dispositivi esistenti (HID: tastiere e mouse sempre permessi)
+    mkdir -p /etc/usbguard
+    cat > /etc/usbguard/rules.conf <<'RULES'
+# AuraOS USBGuard rules
+# Dispositivi HID (tastiere, mouse) sempre permessi
+allow with-interface equals { 03:00:01 }
+allow with-interface equals { 03:01:01 }
+allow with-interface equals { 03:00:02 }
+allow with-interface equals { 03:01:02 }
+# Hubs USB sempre permessi
+allow with-interface equals { 09:00:00 }
+RULES
+fi
+
+# ── Firejail ─────────────────────────────────────────────────────────────────
+echo "[hardening] Configurazione Firejail sandbox..."
+
+# Sandboxia Vivaldi tramite symlink in /usr/local/bin (ha precedenza su /usr/bin)
+for browser in vivaldi vivaldi-stable vivaldi-snapshot; do
+    if [ -x "/usr/bin/$browser" ] || [ -x "/opt/vivaldi/$browser" ]; then
+        # Usa firejail come wrapper; il profilo vivaldi è incluso in firejail-profiles
+        ln -sf /usr/bin/firejail "/usr/local/bin/$browser" 2>/dev/null || true
+    fi
+done
+
+# Sandboxia anche Thunderbird se presente
+if [ -x "/usr/bin/thunderbird" ]; then
+    ln -sf /usr/bin/firejail "/usr/local/bin/thunderbird" 2>/dev/null || true
+fi
+
+# ── Verifica sysctl ───────────────────────────────────────────────────────────
+echo "[hardening] Verifica parametri sysctl..."
+# I parametri vengono applicati da systemd-sysctl al boot leggendo /etc/sysctl.d/
+# In chroot non possiamo applicarli, ma verifichiamo che il file esista
+[ -f /etc/sysctl.d/99-auraos-hardening.conf ] && echo "[hardening] sysctl OK" || echo "[WARN] sysctl config non trovato"
+
+# ── Symlink tools in /usr/local/bin ──────────────────────────────────────────
+ln -sf /usr/local/sbin/auraos-security-audit /usr/local/bin/auraos-security-audit 2>/dev/null || true
+
+echo "=== [AuraOS] Hardening avanzato OK ==="
