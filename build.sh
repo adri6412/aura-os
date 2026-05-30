@@ -74,6 +74,24 @@ auraos_finalize_chroot() {
     ok "Chroot finalizzato (symlink GDM + permessi OK)"
 }
 
+# ── Ricrea chroot.packages.live se lb chroot non l'ha generato ────────────────
+# Alcune versioni di live-build non creano questo file, causando il fallimento
+# di lb binary_manifest con "cp: cannot stat 'chroot.packages.live'".
+ensure_package_manifests() {
+    [[ -d chroot/var/lib/dpkg ]] || return 0
+    if [[ ! -s chroot.packages.live ]]; then
+        warn "chroot.packages.live mancante — ricreazione tramite dpkg-query..."
+        dpkg-query -W --admindir=chroot/var/lib/dpkg \
+            > chroot.packages.live 2>/dev/null || touch chroot.packages.live
+        cp chroot.packages.live chroot.packages.install 2>/dev/null || true
+        dpkg-query -W --admindir=chroot/var/lib/dpkg \
+            --showformat='${Package}:${Architecture}\t${Version}\n' \
+            > chroot.packages-arch.live 2>/dev/null || true
+        find chroot -printf '%P\n' 2>/dev/null | sort > chroot.files || true
+        ok "chroot.packages.live ricreato ($(wc -l < chroot.packages.live) pacchetti)"
+    fi
+}
+
 [[ $EUID -ne 0 ]] && err "Eseguire come root: sudo ./build.sh"
 command -v lb          &>/dev/null || err "live-build non installato. Esegui: apt install live-build"
 command -v debootstrap &>/dev/null || err "debootstrap non installato. Esegui: apt install debootstrap"
@@ -151,6 +169,7 @@ if [[ "$MODE" == "clean" ]]; then
     log "Build chroot (~40 min)..."
     lb chroot    2>&1 | tee -a .build/build.log || err "lb chroot fallita"
     auraos_finalize_chroot
+    ensure_package_manifests
     log "Build binary (~10 min)..."
     lb binary    2>&1 | tee -a .build/build.log || err "lb binary fallita"
 
@@ -176,6 +195,7 @@ elif [[ "$MODE" == "chroot" ]]; then
     log "Rebuild chroot (~25-35 min)..."
     lb chroot 2>&1 | tee -a .build/build.log || err "lb chroot fallita"
     auraos_finalize_chroot
+    ensure_package_manifests
     log "Rebuild binary (~5-10 min)..."
     lb binary 2>&1 | tee -a .build/build.log || err "lb binary fallita"
 
@@ -189,19 +209,7 @@ else
     lb clean --binary 2>/dev/null || true
 
     # lb clean --binary rimuove chroot.packages.live — lo ricreiamo subito.
-    # Usiamo dpkg-query --admindir per leggere il db direttamente senza chroot.
-    if [[ -d chroot/var/lib/dpkg ]]; then
-        dpkg-query -W --admindir=chroot/var/lib/dpkg \
-            > chroot.packages.live 2>/dev/null || touch chroot.packages.live
-        cp chroot.packages.live chroot.packages.install 2>/dev/null || true
-        dpkg-query -W --admindir=chroot/var/lib/dpkg \
-            --showformat='${Package}:${Architecture}\t${Version}\n' \
-            > chroot.packages-arch.live 2>/dev/null || true
-        find chroot -printf '%P\n' 2>/dev/null | sort > chroot.files || true
-        ok "chroot.packages.live ricreato ($(wc -l < chroot.packages.live) pacchetti)"
-    else
-        warn "chroot non trovato — skip manifest"
-    fi
+    ensure_package_manifests
 
     bash auto/config
     mkdir -p .build
