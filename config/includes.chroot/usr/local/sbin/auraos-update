@@ -112,37 +112,51 @@ apply_package_migrations() {
             || echo "[AuraOS] WARN: migrazione $id fallita (skip)"
     }
 
+    # Bind mount necessari per apt-get nel chroot:
+    # postinst/prerm scripts usano systemctl, update-initramfs, ecc.
+    local MIG_BINDS=()
+    for fs in proc sys dev dev/pts run; do
+        mkdir -p "$LOWER/$fs"
+        mount --bind "/$fs" "$LOWER/$fs" 2>/dev/null && MIG_BINDS+=("$LOWER/$fs") || true
+    done
+    # Previeni che systemd dentro il chroot provi a comunicare col sistema host
+    export SYSTEMD_OFFLINE=1
+
     # ── v1.5 ─────────────────────────────────────────────────────────────────
-    # Abilita bluetooth.service se non abilitato
+    # Abilita bluetooth.service tramite symlink diretto (systemctl non funziona in chroot)
     run_migration "v1.5-enable-bluetooth" \
-        bash -c "chroot '$LOWER' systemctl enable bluetooth 2>/dev/null || true"
+        bash -c "mkdir -p '$LOWER/etc/systemd/system/multi-user.target.wants' && \
+            ln -sf /lib/systemd/system/bluetooth.service \
+            '$LOWER/etc/systemd/system/multi-user.target.wants/bluetooth.service' 2>/dev/null || true"
 
     # ── v1.7 ─────────────────────────────────────────────────────────────────
     # Crea /etc/bluetooth/main.conf con AutoEnable=true se non esiste
     run_migration "v1.7-bluetooth-autoenable" \
-        bash -c "
-            mkdir -p '$LOWER/etc/bluetooth'
-            if ! grep -q 'AutoEnable' '$LOWER/etc/bluetooth/main.conf' 2>/dev/null; then
-                printf '[General]\nAutoEnable = true\nFastConnectable = true\n\n[Policy]\nAutoEnable = true\n' \
-                    > '$LOWER/etc/bluetooth/main.conf'
-            fi"
+        bash -c "mkdir -p '$LOWER/etc/bluetooth'
+            grep -q 'AutoEnable' '$LOWER/etc/bluetooth/main.conf' 2>/dev/null && exit 0
+            printf '[General]\nAutoEnable = true\nFastConnectable = true\n\n[Policy]\nAutoEnable = true\n' \
+                > '$LOWER/etc/bluetooth/main.conf'"
 
     # ── v1.9 ─────────────────────────────────────────────────────────────────
     # Rimuovi USBGuard (bloccava BT e USB senza GUI di gestione)
     run_migration "v1.9-remove-usbguard" \
-        bash -c "chroot '$LOWER' dpkg -l usbguard 2>/dev/null | grep -q '^ii' \
-            && chroot '$LOWER' apt-get remove --purge -y usbguard \
-            || true"
+        bash -c "chroot '$LOWER' dpkg -l usbguard 2>/dev/null | grep -q '^ii' || exit 0
+            DEBIAN_FRONTEND=noninteractive chroot '$LOWER' \
+                apt-get remove --purge -y usbguard"
 
     # Installa rfkill e bluez se mancanti
     run_migration "v1.9-install-bluetooth-tools" \
-        bash -c "chroot '$LOWER' apt-get install -y rfkill bluez 2>/dev/null || true"
+        bash -c "DEBIAN_FRONTEND=noninteractive chroot '$LOWER' \
+            apt-get install -y rfkill bluez 2>/dev/null || true"
 
     # ── future ───────────────────────────────────────────────────────────────
-    # Aggiungere nuove migrazioni qui. Il formato è:
-    #   run_migration "vX.Y-descrizione-breve" bash -c "..."
-    # Ogni migrazione viene eseguita una sola volta su qualsiasi sistema,
-    # indipendentemente dalla versione di partenza.
+    # Aggiungere nuove migrazioni qui:
+    #   run_migration "vX.Y-descrizione" bash -c "..."
+    # Ogni migrazione gira una sola volta indipendentemente dalla versione di partenza.
+
+    # Smonta i bind mount
+    for mp in "${MIG_BINDS[@]:-}"; do umount "$mp" 2>/dev/null || true; done
+    unset SYSTEMD_OFFLINE
 }
 
 # ── Aggiornamento componenti custom ──────────────────────────────────────────
