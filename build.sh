@@ -57,6 +57,8 @@ auraos_finalize_chroot() {
         usr/local/sbin/auraos-status
         usr/local/sbin/auraos-reset
         usr/local/sbin/auraos-setup-overlay
+        usr/local/bin/apt
+        usr/local/bin/apt-get
     )
     for f in "${executables[@]}"; do
         [[ -f "$C/$f" ]] && chmod +x "$C/$f"

@@ -45,6 +45,7 @@ load_profile() {
     PROFILE_NAME="" PROFILE_DESC="" PROFILE_CONFLICTS=""
     REMOVE_PACKAGES="" INSTALL_PACKAGES=""
     DISABLE_SERVICES="" ENABLE_SERVICES=""
+    INSTALL_UPPER="" CUSTOM_APPLY_SCRIPT="" CUSTOM_REVERT_SCRIPT=""
     # shellcheck source=/dev/null
     source "$file"
 }
@@ -164,38 +165,54 @@ cmd_apply() {
     # Rimozione pacchetti
     if [[ -n "${REMOVE_PACKAGES}" ]]; then
         echo "[switch] Rimozione: ${REMOVE_PACKAGES}"
-        if $OVERLAY_ACTIVE; then
-            chroot "$root" apt-get remove --purge -y $REMOVE_PACKAGES 2>/dev/null || true
-            chroot "$root" apt-get autoremove --purge -y 2>/dev/null || true
-        else
+        if [[ "${INSTALL_UPPER:-}" == "true" ]] || ! $OVERLAY_ACTIVE; then
             apt-get remove --purge -y $REMOVE_PACKAGES 2>/dev/null || true
             apt-get autoremove --purge -y 2>/dev/null || true
+        else
+            chroot "$root" apt-get remove --purge -y $REMOVE_PACKAGES 2>/dev/null || true
+            chroot "$root" apt-get autoremove --purge -y 2>/dev/null || true
         fi
     fi
 
     # Installazione pacchetti
     if [[ -n "${INSTALL_PACKAGES}" ]]; then
         echo "[switch] Installazione: ${INSTALL_PACKAGES}"
-        if $OVERLAY_ACTIVE; then
-            chroot "$root" apt-get update -qq
-            chroot "$root" apt-get install -y $INSTALL_PACKAGES
-        else
+        if [[ "${INSTALL_UPPER:-}" == "true" ]] || ! $OVERLAY_ACTIVE; then
             apt-get update -qq
             apt-get install -y $INSTALL_PACKAGES
+        else
+            chroot "$root" apt-get update -qq
+            chroot "$root" apt-get install -y $INSTALL_PACKAGES
         fi
     fi
 
     # Servizi da disabilitare
     for svc in $DISABLE_SERVICES; do
         echo "[switch] Disabilito: $svc"
-        systemd_disable "$svc" "$root"
+        if [[ "${INSTALL_UPPER:-}" == "true" ]]; then
+            systemctl stop "$svc" 2>/dev/null || true
+            systemctl disable "$svc" 2>/dev/null || true
+        else
+            systemd_disable "$svc" "$root"
+        fi
     done
 
     # Servizi da abilitare
     for svc in $ENABLE_SERVICES; do
         echo "[switch] Abilito: $svc"
-        systemd_enable "$svc" "$root"
+        if [[ "${INSTALL_UPPER:-}" == "true" ]]; then
+            systemctl enable "$svc" 2>/dev/null || true
+            systemctl start "$svc" 2>/dev/null || true
+        else
+            systemd_enable "$svc" "$root"
+        fi
     done
+
+    # Script personalizzato post-apply (upper layer o logica custom)
+    if [[ -n "${CUSTOM_APPLY_SCRIPT:-}" ]]; then
+        echo "[switch] Esecuzione script personalizzato..."
+        bash -c "${CUSTOM_APPLY_SCRIPT}"
+    fi
 
     mark_active "$name"
 
@@ -224,29 +241,49 @@ cmd_revert() {
 
     # Rimuovi i pacchetti installati dal profilo
     if [[ -n "${INSTALL_PACKAGES}" ]]; then
-        if $OVERLAY_ACTIVE; then
-            chroot "$root" apt-get remove --purge -y $INSTALL_PACKAGES 2>/dev/null || true
-            chroot "$root" apt-get autoremove --purge -y 2>/dev/null || true
-        else
+        if [[ "${INSTALL_UPPER:-}" == "true" ]] || ! $OVERLAY_ACTIVE; then
             apt-get remove --purge -y $INSTALL_PACKAGES 2>/dev/null || true
             apt-get autoremove --purge -y 2>/dev/null || true
+        else
+            chroot "$root" apt-get remove --purge -y $INSTALL_PACKAGES 2>/dev/null || true
+            chroot "$root" apt-get autoremove --purge -y 2>/dev/null || true
         fi
     fi
 
     # Reinstalla i pacchetti rimossi dal profilo
     if [[ -n "${REMOVE_PACKAGES}" ]]; then
-        if $OVERLAY_ACTIVE; then
-            chroot "$root" apt-get update -qq
-            chroot "$root" apt-get install -y $REMOVE_PACKAGES
-        else
+        if [[ "${INSTALL_UPPER:-}" == "true" ]] || ! $OVERLAY_ACTIVE; then
             apt-get update -qq
             apt-get install -y $REMOVE_PACKAGES
+        else
+            chroot "$root" apt-get update -qq
+            chroot "$root" apt-get install -y $REMOVE_PACKAGES
         fi
     fi
 
     # Ripristina stato servizi (inverso)
-    for svc in $ENABLE_SERVICES;  do systemd_disable "$svc" "$root"; done
-    for svc in $DISABLE_SERVICES; do systemd_enable  "$svc" "$root"; done
+    for svc in $ENABLE_SERVICES; do
+        if [[ "${INSTALL_UPPER:-}" == "true" ]]; then
+            systemctl stop "$svc" 2>/dev/null || true
+            systemctl disable "$svc" 2>/dev/null || true
+        else
+            systemd_disable "$svc" "$root"
+        fi
+    done
+    for svc in $DISABLE_SERVICES; do
+        if [[ "${INSTALL_UPPER:-}" == "true" ]]; then
+            systemctl enable "$svc" 2>/dev/null || true
+            systemctl start "$svc" 2>/dev/null || true
+        else
+            systemd_enable  "$svc" "$root"
+        fi
+    done
+
+    # Script personalizzato di ripristino (upper layer o logica custom)
+    if [[ -n "${CUSTOM_REVERT_SCRIPT:-}" ]]; then
+        echo "[switch] Esecuzione script di ripristino personalizzato..."
+        bash -c "${CUSTOM_REVERT_SCRIPT}"
+    fi
 
     mark_inactive "$name"
 

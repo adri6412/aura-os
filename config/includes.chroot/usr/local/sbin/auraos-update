@@ -200,6 +200,16 @@ apply_package_migrations() {
             systemctl disable apt-daily-upgrade.timer 2>/dev/null || true
             systemctl stop apt-daily-upgrade.timer 2>/dev/null || true"
 
+    # ── v2.8 ─────────────────────────────────────────────────────────────────
+    # I wrapper apt/apt-get erano committati come 100644 (non eseguibili) in git.
+    # Senza execute bit /usr/local/bin/apt non viene trovato dal PATH e il sistema
+    # esegue sempre /usr/bin/apt, ignorando il wrapper overlay-aware.
+    run_migration "v2.8-fix-apt-wrapper-perms" \
+        bash -c "
+            chmod +x '$LOWER/usr/local/bin/apt' 2>/dev/null || true
+            chmod +x '$LOWER/usr/local/bin/apt-get' 2>/dev/null || true
+            chmod +x /usr/local/bin/apt /usr/local/bin/apt-get 2>/dev/null || true"
+
     # ── future ───────────────────────────────────────────────────────────────
     # Aggiungere nuove migrazioni qui:
     #   run_migration "vX.Y-descrizione" bash -c "..."

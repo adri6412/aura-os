@@ -152,6 +152,9 @@ if [ -f /etc/fstab ]; then
     log "fstab deduplicato"
 fi
 
+# --- Permessi wrapper apt ---
+chmod +x /usr/local/bin/apt /usr/local/bin/apt-get 2>/dev/null || true
+
 # --- Pulizia generale ---
 rm -f /root/.bash_history
 rm -f /etc/machine-id /var/lib/dbus/machine-id
