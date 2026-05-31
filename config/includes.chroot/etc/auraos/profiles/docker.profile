@@ -46,20 +46,28 @@ apt-get install -y \
     docker-buildx-plugin docker-compose-plugin
 
 # ── Fix overlay-on-overlay ────────────────────────────────────────────────────
-# AuraOS usa overlayfs come root filesystem. Docker usa overlayfs per i
-# container: il kernel rifiuta overlay su overlay ("invalid argument").
-# Soluzione: puntare data-root direttamente sull ext4 sottostante
-# (la partizione auraos-data, accessibile via /run/aura-rw) bypassando
-# il layer overlay. Docker vede ext4 e puo usare overlay2 normalmente.
+# AuraOS usa overlayfs come root filesystem. Docker e containerd usano
+# overlayfs per i layer dei container: il kernel rifiuta overlay annidati
+# ("invalid argument"). La soluzione è puntare sia Docker (data-root) che
+# containerd (root) direttamente all ext4 della partizione auraos-data
+# accessibile via /run/aura-rw, bypassando il layer overlay.
 CONF=/etc/auraos/overlay.conf
 if [[ -f "$CONF" ]]; then
     OVERLAY_SUBDIR=""
     . "$CONF"
     SUBDIR="${OVERLAY_SUBDIR:-.auraos-overlay}"
-    EXT4_DOCKER="/run/aura-rw/${SUBDIR}/upper/var/lib/docker"
-    mkdir -p "$EXT4_DOCKER" /etc/docker
-    echo "{\"data-root\": \"$EXT4_DOCKER\"}" > /etc/docker/daemon.json
-    echo "[docker] data-root configurato su ext4: $EXT4_DOCKER"
+    EXT4="/run/aura-rw/${SUBDIR}/upper"
+
+    # Docker data-root su ext4
+    mkdir -p "$EXT4/var/lib/docker" /etc/docker
+    echo "{\"data-root\": \"$EXT4/var/lib/docker\"}" > /etc/docker/daemon.json
+    echo "[docker] data-root → $EXT4/var/lib/docker"
+
+    # Containerd root su ext4 (snapshotter overlay separato da Docker)
+    mkdir -p "$EXT4/var/lib/containerd" /etc/containerd
+    containerd config default > /etc/containerd/config.toml
+    sed -i "s|^root = .*|root = \"$EXT4/var/lib/containerd\"|" /etc/containerd/config.toml
+    echo "[docker] containerd root → $EXT4/var/lib/containerd"
 else
     echo "[docker] WARN: overlay.conf non trovato — Docker potrebbe non funzionare su AuraOS overlayfs."
 fi
@@ -94,7 +102,8 @@ apt-get autoremove --purge -y 2>/dev/null || true
 
 rm -f /etc/apt/sources.list.d/docker.list \
       /etc/apt/keyrings/docker.asc \
-      /etc/docker/daemon.json
+      /etc/docker/daemon.json \
+      /etc/containerd/config.toml
 apt-get update -qq
 
 echo "[docker] Docker rimosso. Le immagini in /var/lib/docker sono ancora presenti."
