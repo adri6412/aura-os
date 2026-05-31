@@ -58,23 +58,23 @@ echo "[AuraOS] Aggiornamento database pacchetti..."
 chroot "$LOWER" apt-get update -qq
 
 # Mostra i pacchetti che verranno aggiornati
+KERNEL_UPGRADES=0
 UPGRADABLE=$(chroot "$LOWER" apt-get upgrade --dry-run 2>/dev/null | grep "^Inst" | wc -l)
 if [ "$UPGRADABLE" -eq 0 ]; then
-    echo "[AuraOS] Nessun aggiornamento disponibile. Sistema aggiornato."
-    exit 0
+    echo "[AuraOS] Nessun pacchetto Debian da aggiornare."
+else
+    echo "[AuraOS] $UPGRADABLE pacchett$([ "$UPGRADABLE" -eq 1 ] && echo 'o' || echo 'i') da aggiornare."
+
+    # Rileva in anticipo se verrà aggiornato un kernel
+    KERNEL_UPGRADES=$(chroot "$LOWER" apt-get upgrade --dry-run 2>/dev/null | grep "^Inst linux-image" | wc -l)
+
+    chroot "$LOWER" apt-get upgrade -y
+
+    echo ""
+    echo "[AuraOS] ========================================"
+    echo "[AuraOS]  Pacchetti Debian aggiornati."
+    echo "[AuraOS] ========================================"
 fi
-
-echo "[AuraOS] $UPGRADABLE pacchett$([ "$UPGRADABLE" -eq 1 ] && echo 'o' || echo 'i') da aggiornare."
-
-# Rileva in anticipo se verrà aggiornato un kernel
-KERNEL_UPGRADES=$(chroot "$LOWER" apt-get upgrade --dry-run 2>/dev/null | grep "^Inst linux-image" | wc -l)
-
-chroot "$LOWER" apt-get upgrade -y
-
-echo ""
-echo "[AuraOS] ========================================"
-echo "[AuraOS]  Pacchetti Debian aggiornati."
-echo "[AuraOS] ========================================"
 
 # Se un kernel è stato aggiornato, rigenera grub.cfg nel lower layer.
 # Con overlayfs update-grub deve girare nel chroot del lower layer (con i
