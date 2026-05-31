@@ -65,12 +65,36 @@ if [ "$UPGRADABLE" -eq 0 ]; then
 fi
 
 echo "[AuraOS] $UPGRADABLE pacchett$([ "$UPGRADABLE" -eq 1 ] && echo 'o' || echo 'i') da aggiornare."
+
+# Rileva in anticipo se verrà aggiornato un kernel
+KERNEL_UPGRADES=$(chroot "$LOWER" apt-get upgrade --dry-run 2>/dev/null | grep "^Inst linux-image" | wc -l)
+
 chroot "$LOWER" apt-get upgrade -y
 
 echo ""
 echo "[AuraOS] ========================================"
 echo "[AuraOS]  Pacchetti Debian aggiornati."
 echo "[AuraOS] ========================================"
+
+# Se un kernel è stato aggiornato, rigenera grub.cfg nel lower layer.
+# Con overlayfs update-grub deve girare nel chroot del lower layer (con i
+# bind mount di /proc /sys /dev), altrimenti scrive sull'upper layer e
+# GRUB non vede il nuovo kernel al riavvio.
+if [ "$KERNEL_UPGRADES" -gt 0 ]; then
+    echo ""
+    echo "[AuraOS] Kernel aggiornato — rigenero GRUB nel lower layer..."
+    GRUB_BINDS=()
+    for fs in proc sys dev dev/pts run; do
+        mkdir -p "$LOWER/$fs"
+        mount --bind "/$fs" "$LOWER/$fs" 2>/dev/null && GRUB_BINDS+=("$LOWER/$fs") || true
+    done
+    chroot "$LOWER" update-grub 2>/dev/null \
+        || echo "[AuraOS] WARN: update-grub fallito — eseguire manualmente: sudo auraos-change-kernel update-grub"
+    for mp in "${GRUB_BINDS[@]:-}"; do
+        umount "$mp" 2>/dev/null || true
+    done
+    echo "[AuraOS] GRUB aggiornato."
+fi
 
 # ── Aggiornamento componenti custom ──────────────────────────────────────────
 update_custom_components() {
@@ -133,11 +157,13 @@ update_custom_components() {
         echo "[AuraOS] AuraOS scripts: $inst_auraos → $latest_auraos"
         local base_url="https://raw.githubusercontent.com/adri6412/aura-os/${latest_auraos}/config/includes.chroot/usr/local/sbin"
         local ok=true
-        for script in auraos-update auraos-unlock auraos-lock auraos-status auraos-reset auraos-check-updates auraos-switch; do
+        for script in auraos-update auraos-unlock auraos-lock auraos-status auraos-reset auraos-check-updates auraos-switch auraos-change-kernel; do
             if curl -fsSL --max-time 30 "${base_url}/${script}" \
                     -o "$LOWER/usr/local/sbin/${script}.new" 2>/dev/null; then
                 mv "$LOWER/usr/local/sbin/${script}.new" "$LOWER/usr/local/sbin/${script}"
                 chmod +x "$LOWER/usr/local/sbin/${script}"
+                # Crea/aggiorna il symlink in /usr/local/bin (necessario per nuovi script)
+                ln -sf "/usr/local/sbin/${script}" "$LOWER/usr/local/bin/${script}" 2>/dev/null || true
             else
                 echo "[AuraOS] WARN: impossibile scaricare $script, skip."
                 rm -f "$LOWER/usr/local/sbin/${script}.new"

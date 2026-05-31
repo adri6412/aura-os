@@ -1,0 +1,185 @@
+#!/bin/bash
+# auraos-change-kernel — installa/rimuove kernel nel lower layer immutabile di AuraOS.
+#
+# Con overlayfs, update-grub deve girare nel chroot del lower layer (partizione
+# AuraOS), altrimenti le modifiche finiscono nell'upper layer e GRUB non le
+# vede al prossimo avvio.
+#
+# Uso:
+#   auraos-change-kernel list               → elenca kernel installati
+#   auraos-change-kernel install <pkg>      → installa kernel (es. linux-image-6.6.0-1-amd64)
+#   auraos-change-kernel remove <pkg>       → rimuove kernel
+#   auraos-change-kernel update-grub        → rigenera solo grub.cfg
+
+set -euo pipefail
+
+[[ $EUID -ne 0 ]] && { echo "Errore: eseguire come root (sudo auraos-change-kernel)." >&2; exit 1; }
+
+LOWER="/run/aura-lower"
+BIND_MOUNTS=()
+
+ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || true)
+
+# ── Gestione lower layer ──────────────────────────────────────────────────────
+
+mount_lower() {
+    [[ "$ROOT_FSTYPE" != "overlay" ]] && return
+    if [[ ! -d "$LOWER/usr" ]]; then
+        ROOT_DEV=$(blkid -L "AuraOS" 2>/dev/null || true)
+        [[ -n "$ROOT_DEV" ]] || { echo "Errore: partizione AuraOS non trovata." >&2; exit 1; }
+        mkdir -p "$LOWER"
+        mount -o ro "$ROOT_DEV" "$LOWER"
+    fi
+}
+
+unlock_lower() {
+    [[ "$ROOT_FSTYPE" == "overlay" ]] && mount -o remount,rw "$LOWER"
+}
+
+lock_lower() {
+    [[ "$ROOT_FSTYPE" == "overlay" ]] && { sync; mount -o remount,ro "$LOWER" 2>/dev/null || true; }
+}
+
+# ── Bind mount necessari per update-grub nel chroot ──────────────────────────
+# grub-probe deve poter vedere /proc/mounts e /dev per identificare il device
+# su cui risiede /boot.
+
+setup_chroot_mounts() {
+    for fs in proc sys dev dev/pts run; do
+        mkdir -p "$LOWER/$fs"
+        if mount --bind "/$fs" "$LOWER/$fs" 2>/dev/null; then
+            BIND_MOUNTS+=("$LOWER/$fs")
+        fi
+    done
+}
+
+teardown_chroot_mounts() {
+    local mp
+    for mp in "${BIND_MOUNTS[@]:-}"; do
+        umount "$mp" 2>/dev/null || true
+    done
+    BIND_MOUNTS=()
+}
+
+cleanup() {
+    teardown_chroot_mounts
+    lock_lower
+}
+trap cleanup EXIT
+
+# ── Determina target (overlay o sistema diretto) ──────────────────────────────
+
+mount_lower
+
+if [[ "$ROOT_FSTYPE" == "overlay" ]] && [[ -d "$LOWER/usr" ]]; then
+    TARGET="$LOWER"
+    OVERLAY_ACTIVE=true
+else
+    TARGET="/"
+    OVERLAY_ACTIVE=false
+fi
+
+CMD="${1:-help}"
+shift || true
+
+# ── Comandi ───────────────────────────────────────────────────────────────────
+
+cmd_list() {
+    echo "Kernel installati nel lower layer:"
+    local found=false
+    for vmlinuz in "$TARGET/boot/vmlinuz-"*; do
+        [[ -f "$vmlinuz" ]] || continue
+        found=true
+        local ver="${vmlinuz##*/vmlinuz-}"
+        local active=""
+        [[ "$(uname -r)" == "$ver" ]] && active=" (attivo)"
+        echo "  $ver$active"
+    done
+    $found || echo "  (nessuno trovato)"
+}
+
+cmd_install() {
+    local pkg="${1:-}"
+    [[ -n "$pkg" ]] || { echo "Uso: auraos-change-kernel install <linux-image-VERSIONE>" >&2; exit 1; }
+
+    echo "[kernel] ============================================"
+    echo "[kernel]  Installazione kernel: $pkg"
+    $OVERLAY_ACTIVE && echo "[kernel]  Operazioni sul lower layer ($LOWER)."
+    echo "[kernel] ============================================"
+
+    unlock_lower
+    setup_chroot_mounts
+
+    echo "[kernel] Aggiornamento indice pacchetti..."
+    chroot "$TARGET" apt-get update -qq
+
+    echo "[kernel] Installazione $pkg..."
+    chroot "$TARGET" apt-get install -y "$pkg"
+
+    echo "[kernel] Aggiornamento initramfs..."
+    chroot "$TARGET" update-initramfs -u -k all 2>/dev/null \
+        || chroot "$TARGET" update-initramfs -u
+
+    echo "[kernel] Aggiornamento GRUB (nel lower layer)..."
+    chroot "$TARGET" update-grub
+
+    echo ""
+    echo "[kernel] ============================================"
+    echo "[kernel]  Kernel installato. Riavvia per usarlo."
+    echo "[kernel] ============================================"
+}
+
+cmd_remove() {
+    local pkg="${1:-}"
+    [[ -n "$pkg" ]] || { echo "Uso: auraos-change-kernel remove <linux-image-VERSIONE>" >&2; exit 1; }
+
+    echo "[kernel] Rimozione $pkg dal lower layer..."
+    unlock_lower
+    setup_chroot_mounts
+
+    chroot "$TARGET" apt-get remove --purge -y "$pkg"
+    chroot "$TARGET" apt-get autoremove --purge -y
+
+    echo "[kernel] Aggiornamento GRUB..."
+    chroot "$TARGET" update-grub
+
+    echo "[kernel] Fatto. Riavvia per applicare."
+}
+
+cmd_update_grub() {
+    echo "[kernel] Rigenera grub.cfg nel lower layer..."
+    unlock_lower
+    setup_chroot_mounts
+    chroot "$TARGET" update-grub
+    echo "[kernel] GRUB aggiornato."
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+case "$CMD" in
+    list)         cmd_list ;;
+    install)      cmd_install "${1:-}" ;;
+    remove)       cmd_remove  "${1:-}" ;;
+    update-grub)  cmd_update_grub ;;
+    help|--help|-h)
+        cat <<'EOF'
+Uso: auraos-change-kernel <comando> [argomento]
+
+Comandi:
+  list                         Elenca kernel installati nel lower layer
+  install <linux-image-PKG>    Installa kernel e aggiorna GRUB nel lower layer
+  remove  <linux-image-PKG>    Rimuove kernel e aggiorna GRUB nel lower layer
+  update-grub                  Rigenera grub.cfg nel lower layer (senza installare)
+
+Note:
+  Con overlayfs i file del kernel e grub.cfg devono risiedere nel lower layer
+  (partizione AuraOS), altrimenti GRUB non vede il nuovo kernel al riavvio.
+  Questo script monta temporaneamente /proc, /sys, /dev nel chroot del lower
+  layer in modo che grub-probe possa identificare correttamente il device.
+EOF
+        ;;
+    *)
+        echo "Comando sconosciuto: $CMD. Usa 'auraos-change-kernel help'." >&2
+        exit 1
+        ;;
+esac

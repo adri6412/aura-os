@@ -18,10 +18,11 @@ chmod +x /usr/local/sbin/auraos-lock
 chmod +x /usr/local/sbin/auraos-status
 chmod +x /usr/local/sbin/auraos-reset
 chmod +x /usr/local/sbin/auraos-security-audit 2>/dev/null || true
+chmod +x /usr/local/sbin/auraos-change-kernel
 chmod +x /etc/initramfs-tools/hooks/auraos-tools
 
 # Symlink in /usr/local/bin per accesso senza path completo
-for tool in auraos-status auraos-update auraos-unlock auraos-lock auraos-reset; do
+for tool in auraos-status auraos-update auraos-unlock auraos-lock auraos-reset auraos-change-kernel; do
     ln -sf "/usr/local/sbin/$tool" "/usr/local/bin/$tool" 2>/dev/null || true
 done
 

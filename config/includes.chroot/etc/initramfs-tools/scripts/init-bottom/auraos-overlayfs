@@ -66,8 +66,9 @@ fi
 # per non rallentare il boot: se il fs ha errori, resize2fs fallisce in
 # silenzio e il mount successivo lo rileverà.
 resize_data_dev() {
-    command -v resize2fs >/dev/null 2>&1 || return 0
-    resize2fs "$1" >/dev/null 2>&1 || true
+    command -v resize2fs >/dev/null 2>&1 || { echo "AuraOS resize: resize2fs non trovato" >> /run/aura-resize.log; return 0; }
+    resize2fs "$1" >> /run/aura-resize.log 2>&1
+    echo "AuraOS resize: exit $? su $1" >> /run/aura-resize.log
 }
 
 # Prova per UUID da overlay.conf
