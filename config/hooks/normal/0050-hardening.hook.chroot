@@ -44,6 +44,9 @@ allow with-interface equals { 03:00:02 }
 allow with-interface equals { 03:01:02 }
 # Hubs USB sempre permessi
 allow with-interface equals { 09:00:00 }
+# Bluetooth USB (classe E0:01:01 — Intel AX200/AX201/AX210 e altri controller BT)
+# Senza questa regola USBGuard blocca il controller BT prima che btusb possa bindarlo
+allow with-interface equals { e0:01:01 }
 RULES
 fi
 

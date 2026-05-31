@@ -51,6 +51,7 @@ pavucontrol
 # Rete, bluetooth, stampa
 network-manager
 network-manager-gnome
+bluez
 blueman
 cups
 system-config-printer

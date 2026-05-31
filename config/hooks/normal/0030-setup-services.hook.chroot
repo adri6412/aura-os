@@ -123,6 +123,13 @@ if command -v flatpak &>/dev/null; then
     echo "[flatpak] Remote Flathub aggiunto"
 fi
 
+# --- Abilita Bluetooth ---
+# bluetooth.service (bluetoothd da bluez) non viene abilitato automaticamente.
+# Senza questo il controller BT è rilevato ma bluetoothd non parte.
+mkdir -p /etc/systemd/system/multi-user.target.wants
+ln -sf /lib/systemd/system/bluetooth.service \
+    /etc/systemd/system/multi-user.target.wants/bluetooth.service 2>/dev/null || true
+
 # --- Abilita GDM e target grafico ---
 # Symlink diretti (systemctl enable non funziona in chroot senza systemd).
 mkdir -p /etc/systemd/system/graphical.target.wants
