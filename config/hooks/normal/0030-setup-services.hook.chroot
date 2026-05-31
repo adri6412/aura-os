@@ -96,12 +96,19 @@ chmod +x /usr/local/bin/calamares-kiosk.sh 2>/dev/null || true
 chmod +x /usr/local/lib/auraos-cleanup.sh 2>/dev/null || true
 chmod +x /usr/local/sbin/auraos-check-updates 2>/dev/null || true
 
-# --- Inizializza versions.conf con versione AuraOS (AGH la sovrascrive dopo) ---
+# --- Inizializza versions.conf con versione AuraOS corrente ---
+# Recupera il tag dell'ultima release da GitHub durante la build.
+# Questo evita che i sistemi installati dalla ISO partano con versione vuota
+# e riscarichiamo tutti gli script inutilmente al primo auraos-update.
 mkdir -p /etc/auraos/profiles
-if ! grep -q "^AURAOS_VERSION=" /etc/auraos/versions.conf 2>/dev/null; then
-    sed -i '/^AURAOS_VERSION=/d' /etc/auraos/versions.conf 2>/dev/null || true
-    echo 'AURAOS_VERSION="v1.0.0"' >> /etc/auraos/versions.conf
-fi
+AURAOS_BUILD_VER=$(curl -sf --max-time 15 \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/adri6412/aura-os/releases/latest" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" \
+    2>/dev/null || echo "v2.5")
+sed -i "s/^AURAOS_VERSION=.*/AURAOS_VERSION=\"${AURAOS_BUILD_VER}\"/" \
+    /etc/auraos/versions.conf
+echo "[auraos] Versione build impostata: $AURAOS_BUILD_VER"
 # File di stato profili (vuoto = solo profili default attivi)
 touch /etc/auraos/active-profiles.conf
 

@@ -140,37 +140,55 @@ apply_package_migrations() {
     chroot_mount "$LOWER"
     export SYSTEMD_OFFLINE=1
 
+    # Principio: ogni file scritto nel lower layer ($LOWER/X) va replicato anche
+    # nel path corrente (/X) per evitare che l'upper layer abbia copie vecchie
+    # che fanno shadowing. Le modifiche al lower layer prendono effetto al reboot;
+    # la replica nel path corrente garantisce l'effetto immediato senza reboot.
+
     # ── v1.5 ─────────────────────────────────────────────────────────────────
-    # Abilita bluetooth.service tramite symlink diretto (systemctl non funziona in chroot)
     run_migration "v1.5-enable-bluetooth" \
-        bash -c "mkdir -p '$LOWER/etc/systemd/system/multi-user.target.wants' && \
+        bash -c "mkdir -p '$LOWER/etc/systemd/system/multi-user.target.wants'
             ln -sf /lib/systemd/system/bluetooth.service \
-            '$LOWER/etc/systemd/system/multi-user.target.wants/bluetooth.service' 2>/dev/null || true"
+                '$LOWER/etc/systemd/system/multi-user.target.wants/bluetooth.service' 2>/dev/null || true
+            # Replica nel path corrente
+            mkdir -p /etc/systemd/system/multi-user.target.wants
+            ln -sf /lib/systemd/system/bluetooth.service \
+                /etc/systemd/system/multi-user.target.wants/bluetooth.service 2>/dev/null || true
+            systemctl enable bluetooth 2>/dev/null || true
+            systemctl start bluetooth 2>/dev/null || true"
 
     # ── v1.7 ─────────────────────────────────────────────────────────────────
-    # Crea /etc/bluetooth/main.conf con AutoEnable=true se non esiste
     run_migration "v1.7-bluetooth-autoenable" \
-        bash -c "mkdir -p '$LOWER/etc/bluetooth'
-            grep -q 'AutoEnable' '$LOWER/etc/bluetooth/main.conf' 2>/dev/null && exit 0
-            printf '[General]\nAutoEnable = true\nFastConnectable = true\n\n[Policy]\nAutoEnable = true\n' \
-                > '$LOWER/etc/bluetooth/main.conf'"
+        bash -c "
+            CONF='[General]\nAutoEnable = true\nFastConnectable = true\n\n[Policy]\nAutoEnable = true\n'
+            # Lower layer
+            mkdir -p '$LOWER/etc/bluetooth'
+            grep -q 'AutoEnable' '$LOWER/etc/bluetooth/main.conf' 2>/dev/null \
+                || printf \"\$CONF\" > '$LOWER/etc/bluetooth/main.conf'
+            # Path corrente (replica)
+            mkdir -p /etc/bluetooth
+            grep -q 'AutoEnable' /etc/bluetooth/main.conf 2>/dev/null \
+                || printf \"\$CONF\" > /etc/bluetooth/main.conf
+            systemctl restart bluetooth 2>/dev/null || true"
 
     # ── v1.9 ─────────────────────────────────────────────────────────────────
-    # Rimuovi USBGuard (bloccava BT e USB senza GUI di gestione)
     run_migration "v1.9-remove-usbguard" \
         bash -c "chroot '$LOWER' dpkg -l usbguard 2>/dev/null | grep -q '^ii' || exit 0
-            DEBIAN_FRONTEND=noninteractive chroot '$LOWER' \
-                apt-get remove --purge -y usbguard"
+            DEBIAN_FRONTEND=noninteractive chroot '$LOWER' apt-get remove --purge -y usbguard
+            # Ferma e disabilita anche nel sistema in esecuzione
+            systemctl stop usbguard 2>/dev/null || true
+            systemctl disable usbguard 2>/dev/null || true"
 
-    # Installa rfkill e bluez se mancanti
     run_migration "v1.9-install-bluetooth-tools" \
         bash -c "DEBIAN_FRONTEND=noninteractive chroot '$LOWER' \
+            apt-get install -y rfkill bluez 2>/dev/null || true
+            # Installa anche nel sistema in esecuzione se mancanti
             apt-get install -y rfkill bluez 2>/dev/null || true"
 
     # ── future ───────────────────────────────────────────────────────────────
     # Aggiungere nuove migrazioni qui:
     #   run_migration "vX.Y-descrizione" bash -c "..."
-    # Ogni migrazione gira una sola volta indipendentemente dalla versione di partenza.
+    # REGOLA: ogni modifica a $LOWER/X va replicata anche su /X (path corrente).
 
     chroot_umount
     unset SYSTEMD_OFFLINE
@@ -223,8 +241,12 @@ update_custom_components() {
             systemctl stop AdGuardHome 2>/dev/null || true
             tar -xzf /tmp/agh-update.tar.gz -C /tmp/
             install -m 0755 /tmp/AdGuardHome/AdGuardHome "$LOWER/opt/AdGuardHome/AdGuardHome"
+            # Replica nel path corrente
+            cp "$LOWER/opt/AdGuardHome/AdGuardHome" "/opt/AdGuardHome/AdGuardHome" 2>/dev/null || true
             rm -rf /tmp/AdGuardHome /tmp/agh-update.tar.gz
+            # Aggiorna versions.conf: lower layer E path corrente
             sed -i "s/^ADGUARDHOME_VERSION=.*/ADGUARDHOME_VERSION=\"${latest_agh}\"/" "$VERSIONS_FILE"
+            sed -i "s/^ADGUARDHOME_VERSION=.*/ADGUARDHOME_VERSION=\"${latest_agh}\"/" /etc/auraos/versions.conf 2>/dev/null || true
             systemctl start AdGuardHome 2>/dev/null || true
             echo "[AuraOS] AdGuardHome aggiornato a $latest_agh."
             updated=true
@@ -265,13 +287,18 @@ update_custom_components() {
             | python3 -c "import sys,json; [print(f['name']) for f in json.load(sys.stdin) if f['name'].endswith('.profile')]" \
             2>/dev/null || echo "")
         if [[ -n "$profiles_index" ]]; then
-            mkdir -p "$LOWER/etc/auraos/profiles"
+            mkdir -p "$LOWER/etc/auraos/profiles" /etc/auraos/profiles
             while IFS= read -r pfile; do
-                curl -fsSL --max-time 30 "${profiles_url}/${pfile}" \
-                    -o "$LOWER/etc/auraos/profiles/${pfile}.new" 2>/dev/null \
-                    && mv "$LOWER/etc/auraos/profiles/${pfile}.new" \
-                          "$LOWER/etc/auraos/profiles/${pfile}" \
-                    || rm -f "$LOWER/etc/auraos/profiles/${pfile}.new"
+                if curl -fsSL --max-time 30 "${profiles_url}/${pfile}" \
+                        -o "$LOWER/etc/auraos/profiles/${pfile}.new" 2>/dev/null; then
+                    mv "$LOWER/etc/auraos/profiles/${pfile}.new" \
+                       "$LOWER/etc/auraos/profiles/${pfile}"
+                    # Replica nel path corrente
+                    cp "$LOWER/etc/auraos/profiles/${pfile}" \
+                       "/etc/auraos/profiles/${pfile}" 2>/dev/null || true
+                else
+                    rm -f "$LOWER/etc/auraos/profiles/${pfile}.new"
+                fi
             done <<< "$profiles_index"
             echo "[AuraOS] Profili aggiornati."
         fi
@@ -291,7 +318,9 @@ update_custom_components() {
         fi
 
         if $ok; then
+            # Aggiorna versions.conf: lower layer E path corrente
             sed -i "s/^AURAOS_VERSION=.*/AURAOS_VERSION=\"${latest_auraos}\"/" "$VERSIONS_FILE"
+            sed -i "s/^AURAOS_VERSION=.*/AURAOS_VERSION=\"${latest_auraos}\"/" /etc/auraos/versions.conf 2>/dev/null || true
             echo "[AuraOS] Script auraos-* aggiornati a $latest_auraos."
             updated=true
         fi
