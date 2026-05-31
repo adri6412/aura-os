@@ -44,7 +44,36 @@ echo "[AuraOS] Sblocco root reale..."
 mount -o remount,rw "$LOWER"
 echo "[AuraOS] Root sbloccato."
 
+# Array globale dei mount di chroot — popolato da chroot_mount, smontato da cleanup
+CHROOT_MOUNTS=()
+
+chroot_mount() {
+    local lower="$1"
+    # Monta filesystem necessari per apt/dpkg nel chroot.
+    # IMPORTANTE: devpts e proc/sys/run vengono montati come nuove istanze
+    # (non bind mount) per evitare conflitti con il sistema host e il problema
+    # "no more PTYs" che si verifica quando si bind-monta /dev/pts condiviso.
+    mkdir -p "$lower"/{proc,sys,dev,dev/pts,run}
+    mount -t proc  proc  "$lower/proc"                              && CHROOT_MOUNTS+=("$lower/proc")
+    mount -t sysfs sysfs "$lower/sys"                               && CHROOT_MOUNTS+=("$lower/sys")
+    mount --bind   /dev  "$lower/dev"                               && CHROOT_MOUNTS+=("$lower/dev")
+    mount -t devpts devpts "$lower/dev/pts" -o nosuid,noexec,gid=5,mode=620 \
+                                                                    && CHROOT_MOUNTS+=("$lower/dev/pts")
+    mount -t tmpfs tmpfs "$lower/run" -o mode=755,nosuid,nodev      && CHROOT_MOUNTS+=("$lower/run")
+}
+
+chroot_umount() {
+    # Smonta in ordine inverso
+    local i
+    for (( i=${#CHROOT_MOUNTS[@]}-1; i>=0; i-- )); do
+        umount "${CHROOT_MOUNTS[$i]}" 2>/dev/null || umount -l "${CHROOT_MOUNTS[$i]}" 2>/dev/null || true
+    done
+    CHROOT_MOUNTS=()
+}
+
 cleanup() {
+    # Smonta sempre i filesystem di chroot prima di rimettere il lower in ro
+    chroot_umount
     echo ""
     echo "[AuraOS] Blocco root reale (immutabile)..."
     sync
@@ -83,16 +112,10 @@ fi
 if [ "$KERNEL_UPGRADES" -gt 0 ]; then
     echo ""
     echo "[AuraOS] Kernel aggiornato — rigenero GRUB nel lower layer..."
-    GRUB_BINDS=()
-    for fs in proc sys dev dev/pts run; do
-        mkdir -p "$LOWER/$fs"
-        mount --bind "/$fs" "$LOWER/$fs" 2>/dev/null && GRUB_BINDS+=("$LOWER/$fs") || true
-    done
+    chroot_mount "$LOWER"
     chroot "$LOWER" update-grub 2>/dev/null \
         || echo "[AuraOS] WARN: update-grub fallito — eseguire manualmente: sudo auraos-change-kernel update-grub"
-    for mp in "${GRUB_BINDS[@]:-}"; do
-        umount "$mp" 2>/dev/null || true
-    done
+    chroot_umount
     echo "[AuraOS] GRUB aggiornato."
 fi
 
@@ -112,14 +135,9 @@ apply_package_migrations() {
             || echo "[AuraOS] WARN: migrazione $id fallita (skip)"
     }
 
-    # Bind mount necessari per apt-get nel chroot:
-    # postinst/prerm scripts usano systemctl, update-initramfs, ecc.
-    local MIG_BINDS=()
-    for fs in proc sys dev dev/pts run; do
-        mkdir -p "$LOWER/$fs"
-        mount --bind "/$fs" "$LOWER/$fs" 2>/dev/null && MIG_BINDS+=("$LOWER/$fs") || true
-    done
-    # Previeni che systemd dentro il chroot provi a comunicare col sistema host
+    # Monta proc/sys/dev/devpts/run nel chroot (devpts come nuova istanza,
+    # non bind mount, per evitare esaurimento PTY sul sistema host)
+    chroot_mount "$LOWER"
     export SYSTEMD_OFFLINE=1
 
     # ── v1.5 ─────────────────────────────────────────────────────────────────
@@ -154,8 +172,7 @@ apply_package_migrations() {
     #   run_migration "vX.Y-descrizione" bash -c "..."
     # Ogni migrazione gira una sola volta indipendentemente dalla versione di partenza.
 
-    # Smonta i bind mount
-    for mp in "${MIG_BINDS[@]:-}"; do umount "$mp" 2>/dev/null || true; done
+    chroot_umount
     unset SYSTEMD_OFFLINE
 }
 
