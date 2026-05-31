@@ -101,8 +101,18 @@ else
 
     echo ""
     echo "[AuraOS] ========================================"
-    echo "[AuraOS]  Pacchetti Debian aggiornati."
+    echo "[AuraOS]  Pacchetti Debian aggiornati nel lower layer."
     echo "[AuraOS] ========================================"
+
+    # Sincronizza il sistema in esecuzione (upper layer / merged view).
+    # Se un pacchetto ha una versione precedente nell'upper layer (messa da
+    # unattended-upgrades o da un apt manuale), farebbe shadowing sul lower
+    # layer appena aggiornato. Aggiornando anche il sistema in esecuzione
+    # ci assicuriamo che l'upper layer abbia la stessa versione del lower.
+    echo "[AuraOS] Sincronizzazione sistema in esecuzione..."
+    apt-get update -qq 2>/dev/null || true
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y 2>/dev/null || true
+    echo "[AuraOS] Sistema in esecuzione sincronizzato."
 fi
 
 # Se un kernel è stato aggiornato, rigenera grub.cfg nel lower layer.
@@ -184,6 +194,20 @@ apply_package_migrations() {
             apt-get install -y rfkill bluez 2>/dev/null || true
             # Installa anche nel sistema in esecuzione se mancanti
             apt-get install -y rfkill bluez 2>/dev/null || true"
+
+    # ── v2.7 ─────────────────────────────────────────────────────────────────
+    # Disabilita unattended-upgrades: con overlayfs scrive pacchetti nell'upper
+    # layer che fanno shadowing sul lower layer aggiornato da auraos-update.
+    run_migration "v2.7-disable-unattended-upgrades" \
+        bash -c "
+            # Lower layer
+            sed -i 's/Unattended-Upgrade \"1\"/Unattended-Upgrade \"0\"/' \
+                '$LOWER/etc/apt/apt.conf.d/20auto-upgrades' 2>/dev/null || true
+            # Path corrente
+            sed -i 's/Unattended-Upgrade \"1\"/Unattended-Upgrade \"0\"/' \
+                /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null || true
+            systemctl disable apt-daily-upgrade.timer 2>/dev/null || true
+            systemctl stop apt-daily-upgrade.timer 2>/dev/null || true"
 
     # ── future ───────────────────────────────────────────────────────────────
     # Aggiungere nuove migrazioni qui:

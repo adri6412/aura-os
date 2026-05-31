@@ -39,9 +39,16 @@ ufw default deny incoming
 ufw default allow outgoing
 ufw --force enable
 
+# Aggiornamento automatico pacchetti: DISABILITATO per overlayfs.
+# Con overlayfs, unattended-upgrades scrive i pacchetti aggiornati nell'upper
+# layer. Quando poi auraos-update aggiorna gli stessi pacchetti nel lower layer,
+# l'upper ha versioni vecchie che fanno shadowing → l'utente vede versioni
+# obsolete nonostante l'upgrade nel lower layer.
+# Gli aggiornamenti vengono gestiti da auraos-update (aggiorna il lower layer
+# + sincronizza il sistema in esecuzione) tramite il timer auraos-update-check.
 cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
 APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::Unattended-Upgrade "0";
 APT::Periodic::AutocleanInterval "7";
 EOF
 
