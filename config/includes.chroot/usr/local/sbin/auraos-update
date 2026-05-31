@@ -129,6 +129,9 @@ update_custom_components() {
     latest_agh=$(gh_latest "AdguardTeam/AdGuardHome")
     latest_auraos=$(gh_latest "adri6412/aura-os")
 
+    echo "[AuraOS]  Installato:  auraos=${inst_auraos:-<non impostato>}  agh=${inst_agh:-<non impostato>}"
+    echo "[AuraOS]  Disponibile: auraos=${latest_auraos:-<non raggiungibile>}  agh=${latest_agh:-<non raggiungibile>}"
+
     local updated=false
 
     # ── AdGuardHome ───────────────────────────────────────────────────────────
