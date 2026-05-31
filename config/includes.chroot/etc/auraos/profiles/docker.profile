@@ -72,8 +72,13 @@ else
     echo "[docker] WARN: overlay.conf non trovato — Docker potrebbe non funzionare su AuraOS overlayfs."
 fi
 
+# Ferma docker prima di ricaricare containerd, poi riparti nell'ordine giusto.
+# Senza questo containerd continua a girare col vecchio config (path su overlayfs)
+# e crea snapshot su overlayfs → "invalid argument" al primo docker run.
+systemctl stop docker docker.socket 2>/dev/null || true
 systemctl enable docker
-systemctl restart docker
+systemctl restart containerd
+systemctl start docker
 
 # Aggiunge l utente principale al gruppo docker
 MAIN_USER=$(loginctl list-users --no-legend 2>/dev/null \
