@@ -294,7 +294,8 @@ update_custom_components() {
                     -o "$LOWER/usr/local/bin/${wrapper}.new" 2>/dev/null; then
                 mv "$LOWER/usr/local/bin/${wrapper}.new" "$LOWER/usr/local/bin/${wrapper}"
                 chmod +x "$LOWER/usr/local/bin/${wrapper}"
-                cp "$LOWER/usr/local/bin/${wrapper}" "/usr/local/bin/${wrapper}" 2>/dev/null || true
+                cp "$LOWER/usr/local/bin/${wrapper}" "/usr/local/bin/${wrapper}.new~" 2>/dev/null || true
+                mv "/usr/local/bin/${wrapper}.new~" "/usr/local/bin/${wrapper}" 2>/dev/null || true
             else
                 rm -f "$LOWER/usr/local/bin/${wrapper}.new"
             fi
@@ -306,15 +307,15 @@ update_custom_components() {
                 mv "$LOWER/usr/local/sbin/${script}.new" "$LOWER/usr/local/sbin/${script}"
                 chmod +x "$LOWER/usr/local/sbin/${script}"
                 ln -sf "/usr/local/sbin/${script}" "$LOWER/usr/local/bin/${script}" 2>/dev/null || true
-                # Copia nel path in esecuzione per effetto immediato — tranne
-                # auraos-update stesso: sovrascriverlo mentre è in esecuzione
-                # causa bash a leggere il nuovo file a offset sbagliato (glitch).
-                # Il nuovo auraos-update sarà usato alla prossima invocazione
-                # tramite il lower layer aggiornato.
-                if [[ "$script" != "auraos-update" ]]; then
-                    cp "$LOWER/usr/local/sbin/${script}" "/usr/local/sbin/${script}" 2>/dev/null || true
-                    chmod +x "/usr/local/sbin/${script}" 2>/dev/null || true
-                fi
+                # Usa cp+mv invece di cp diretto: cp crea un nuovo inode,
+                # mv sostituisce il directory entry atomicamente. Bash continua
+                # a leggere il vecchio inode via fd già aperto — nessun glitch.
+                # (cp diretto sovrascrive lo stesso inode e bash leggerebbe
+                # contenuto misto vecchio/nuovo se il file è in esecuzione.)
+                local _tmp="/usr/local/sbin/${script}.new~"
+                cp "$LOWER/usr/local/sbin/${script}" "$_tmp" 2>/dev/null || true
+                chmod +x "$_tmp" 2>/dev/null || true
+                mv "$_tmp" "/usr/local/sbin/${script}" 2>/dev/null || true
             else
                 echo "[AuraOS] WARN: impossibile scaricare $script, skip."
                 rm -f "$LOWER/usr/local/sbin/${script}.new"
