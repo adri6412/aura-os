@@ -191,6 +191,19 @@ update_custom_components() {
             done <<< "$profiles_index"
             echo "[AuraOS] Profili aggiornati."
         fi
+        # Aggiorna anche il manager (file Python — contiene le tab UI)
+        local manager_url="https://raw.githubusercontent.com/adri6412/aura-os/${latest_auraos}/config/includes.chroot/opt/auraos-manager/auraos_manager.py"
+        if curl -fsSL --max-time 30 "$manager_url" \
+                -o "$LOWER/opt/auraos-manager/auraos_manager.py.new" 2>/dev/null; then
+            mv "$LOWER/opt/auraos-manager/auraos_manager.py.new" \
+               "$LOWER/opt/auraos-manager/auraos_manager.py"
+            chmod +x "$LOWER/opt/auraos-manager/auraos_manager.py"
+            echo "[AuraOS] Manager UI aggiornato."
+        else
+            rm -f "$LOWER/opt/auraos-manager/auraos_manager.py.new"
+            echo "[AuraOS] WARN: impossibile aggiornare il manager, skip."
+        fi
+
         if $ok; then
             sed -i "s/^AURAOS_VERSION=.*/AURAOS_VERSION=\"${latest_auraos}\"/" "$VERSIONS_FILE"
             echo "[AuraOS] Script auraos-* aggiornati a $latest_auraos."

@@ -20,7 +20,7 @@ TAG=$(curl -sf --max-time 15 \
 [[ -z "$TAG" ]] && { echo "Errore: impossibile recuperare la versione da GitHub." >&2; exit 1; }
 echo "[bootstrap] Ultima versione: $TAG"
 
-BASE="https://raw.githubusercontent.com/adri6412/aura-os/${TAG}/config/includes.chroot/usr/local/sbin"
+BASE="https://raw.githubusercontent.com/adri6412/aura-os/${TAG}/config/includes.chroot"
 SCRIPTS=(auraos-update auraos-check-updates auraos-switch auraos-lock auraos-unlock
          auraos-status auraos-reset auraos-change-kernel)
 
@@ -37,7 +37,7 @@ fi
 
 for script in "${SCRIPTS[@]}"; do
     printf "[bootstrap]  %-30s" "$script"
-    if curl -fsSL --max-time 30 "${BASE}/${script}" \
+    if curl -fsSL --max-time 30 "${BASE}/usr/local/sbin/${script}" \
             -o "${TARGET}/usr/local/sbin/${script}" 2>/dev/null; then
         chmod +x "${TARGET}/usr/local/sbin/${script}"
         ln -sf "/usr/local/sbin/${script}" "${TARGET}/usr/local/bin/${script}" 2>/dev/null || true
@@ -47,6 +47,16 @@ for script in "${SCRIPTS[@]}"; do
     fi
 done
 
+# Aggiorna anche il manager (file Python — contiene le tab UI)
+printf "[bootstrap]  %-30s" "auraos_manager.py"
+if curl -fsSL --max-time 30 "${BASE}/opt/auraos-manager/auraos_manager.py" \
+        -o "${TARGET}/opt/auraos-manager/auraos_manager.py" 2>/dev/null; then
+    chmod +x "${TARGET}/opt/auraos-manager/auraos_manager.py"
+    echo "OK"
+else
+    echo "ERRORE (skip)"
+fi
+
 VFILE="${TARGET}/etc/auraos/versions.conf"
 if [[ -f "$VFILE" ]]; then
     sed -i "s/^AURAOS_VERSION=.*/AURAOS_VERSION=\"${TAG}\"/" "$VFILE"
@@ -54,4 +64,4 @@ if [[ -f "$VFILE" ]]; then
 fi
 
 echo ""
-echo "[bootstrap] Fatto. Esegui ora: sudo auraos-update"
+echo "[bootstrap] Fatto. Riavvia il manager per vedere le modifiche."
