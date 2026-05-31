@@ -108,18 +108,41 @@ apply_package_migrations() {
         local id="$1"; shift
         grep -qx "$id" "$DONE_FILE" 2>/dev/null && return 0
         echo "[AuraOS] Migrazione: $id"
-        "$@" && echo "$id" >> "$DONE_FILE" || echo "[AuraOS] WARN: migrazione $id fallita (skip)"
+        "$@" && echo "$id" >> "$DONE_FILE" \
+            || echo "[AuraOS] WARN: migrazione $id fallita (skip)"
     }
 
-    # v1.9 — rimuovi USBGuard (bloccava BT e USB senza GUI di gestione)
-    run_migration "remove-usbguard" \
+    # ── v1.5 ─────────────────────────────────────────────────────────────────
+    # Abilita bluetooth.service se non abilitato
+    run_migration "v1.5-enable-bluetooth" \
+        bash -c "chroot '$LOWER' systemctl enable bluetooth 2>/dev/null || true"
+
+    # ── v1.7 ─────────────────────────────────────────────────────────────────
+    # Crea /etc/bluetooth/main.conf con AutoEnable=true se non esiste
+    run_migration "v1.7-bluetooth-autoenable" \
+        bash -c "
+            mkdir -p '$LOWER/etc/bluetooth'
+            if ! grep -q 'AutoEnable' '$LOWER/etc/bluetooth/main.conf' 2>/dev/null; then
+                printf '[General]\nAutoEnable = true\nFastConnectable = true\n\n[Policy]\nAutoEnable = true\n' \
+                    > '$LOWER/etc/bluetooth/main.conf'
+            fi"
+
+    # ── v1.9 ─────────────────────────────────────────────────────────────────
+    # Rimuovi USBGuard (bloccava BT e USB senza GUI di gestione)
+    run_migration "v1.9-remove-usbguard" \
         bash -c "chroot '$LOWER' dpkg -l usbguard 2>/dev/null | grep -q '^ii' \
             && chroot '$LOWER' apt-get remove --purge -y usbguard \
             || true"
 
-    # v1.9 — installa rfkill e bluez se mancanti
-    run_migration "install-bluetooth-tools" \
+    # Installa rfkill e bluez se mancanti
+    run_migration "v1.9-install-bluetooth-tools" \
         bash -c "chroot '$LOWER' apt-get install -y rfkill bluez 2>/dev/null || true"
+
+    # ── future ───────────────────────────────────────────────────────────────
+    # Aggiungere nuove migrazioni qui. Il formato è:
+    #   run_migration "vX.Y-descrizione-breve" bash -c "..."
+    # Ogni migrazione viene eseguita una sola volta su qualsiasi sistema,
+    # indipendentemente dalla versione di partenza.
 }
 
 # ── Aggiornamento componenti custom ──────────────────────────────────────────
