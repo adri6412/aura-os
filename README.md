@@ -16,7 +16,6 @@ Progettata per essere sicura, privata e con filesystem immutabile tramite Overla
 - **Kernel hardening** — ASLR massimo, kptr_restrict, ptrace_scope, TCP SYN cookies, blocco ICMP redirect/source routing, rp_filter
 - **AppArmor** — abilitato in enforce mode con profili per browser e applicazioni
 - **Firejail** — sandbox per Vivaldi e Thunderbird
-- **USBGuard** — controllo accesso dispositivi USB
 - **AdGuard Home** — filtro DNS locale con DNSSEC, DoH upstream, blocco malware/pubblicità
 - **UFW** — firewall con policy default-deny incoming
 - **ClamAV** — antivirus con aggiornamento automatico definizioni
@@ -30,8 +29,9 @@ Progettata per essere sicura, privata e con filesystem immutabile tramite Overla
 - **LibreOffice**, **VLC**, GNOME Software + Flatpak
 
 ### Strumenti AuraOS
-- **AuraOS Manager** — app GTK4 per gestione profili, aggiornamenti, stato sistema e **dashboard di sicurezza**
+- **AuraOS Manager** — app GTK4 per gestione profili, aggiornamenti, kernel, stato sistema e **dashboard di sicurezza**
 - `auraos-status/unlock/lock/update/reset` — gestione overlay da terminale
+- `auraos-change-kernel` — installa/rimuovi kernel nel lower layer immutabile
 - `auraos-security-audit` — audit Lynis con score salvato in cache
 
 ---
@@ -49,11 +49,22 @@ Progettata per essere sicura, privata e con filesystem immutabile tramite Overla
 
 ## Build
 
-```bash
-# Clona il repo
-git clone https://github.com/adri6412/aura-os.git
-cd aura-os
+### 1. Scarica i pacchetti di terze parti
 
+I pacchetti non distribuibili via git (Ivanti VPN, ecc.) vanno scaricati prima del build:
+
+```bash
+./download-extras.sh
+```
+
+Questo scarica i `.deb` in `config/packages.chroot/`. Se un URL non è più raggiungibile, puoi piazzare manualmente il file nella stessa directory — i nomi attesi sono documentati in `download-extras.sh`.
+
+> **Nota:** i file in `config/packages.chroot/` sono esclusi da git (`.gitignore`).  
+> Chiunque cloni il repo deve eseguire `download-extras.sh` prima di buildare.
+
+### 2. Compila la ISO
+
+```bash
 # Build veloce: aggiorna i file nel chroot esistente e ricostruisce solo la ISO (~5-10 min)
 sudo ./build.sh
 
@@ -86,19 +97,24 @@ sudo dd if=output/auraos-1.0-amd64.iso of=/dev/sdX bs=4M status=progress conv=fs
 aura-os/
 ├── auto/config                   # Configurazione live-build (lb config)
 ├── build.sh                      # Script di build principale
+├── download-extras.sh            # Scarica pacchetti non inclusi in git
+├── bootstrap.sh                  # Aggiorna gli script auraos-* su sistemi installati
 └── config/
     ├── bootloaders/              # GRUB (EFI) e Syslinux (BIOS) custom
     ├── hooks/
     │   ├── normal/               # Hook chroot (0010 base, 0045 overlay, 0050 hardening)
     │   └── binary/               # Hook binary stage
     ├── includes.chroot/          # File copiati direttamente nella ISO
+    │   ├── etc/bluetooth/        # Configurazione bluetoothd (AutoEnable)
     │   ├── etc/calamares/        # Configurazione installer Calamares
     │   ├── etc/sysctl.d/         # Kernel hardening parameters
     │   ├── etc/systemd/          # Servizi systemd custom
     │   ├── opt/auraos-manager/   # AuraOS Manager (GTK4)
-    │   ├── usr/local/sbin/       # Strumenti auraos-* (update/lock/unlock/audit)
+    │   ├── usr/local/sbin/       # Strumenti auraos-* (update/lock/unlock/audit/kernel)
     │   └── etc/initramfs-tools/  # Script OverlayFS nell'initramfs
-    └── package-lists/            # Liste pacchetti apt
+    ├── package-lists/            # Liste pacchetti apt
+    └── packages.chroot/          # .deb locali installati nel chroot (esclusi da git)
+                                  # → riempire con download-extras.sh
 ```
 
 ---
@@ -122,7 +138,25 @@ merged = / (quello che l'utente vede)
 | `sudo auraos-lock`   | Torna in sola lettura |
 | `sudo auraos-update` | Aggiorna il sistema (sblocca, apt upgrade, riblocca) |
 | `sudo auraos-reset`  | Cancella l'upper layer (reset alle impostazioni di fabbrica) |
+| `sudo auraos-change-kernel list\|install\|remove` | Gestione kernel nel lower layer |
 | `sudo auraos-security-audit` | Esegue audit Lynis e salva lo score |
+
+---
+
+## Aggiornamenti su sistemi installati
+
+Gli script `auraos-*` e il manager si aggiornano automaticamente senza rebuild della ISO:
+
+```bash
+sudo auraos-update
+```
+
+Per il primo aggiornamento (bootstrap):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/adri6412/aura-os/main/bootstrap.sh | sudo bash
+sudo auraos-update
+```
 
 ---
 

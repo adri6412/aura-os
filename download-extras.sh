@@ -11,7 +11,7 @@ echo "=== Download pacchetti extra ==="
 
 # Ivanti Secure Access Client (Pulse VPN)
 IVANTI_URL="https://cdn.ku.edu.tr/cdn/files/help/ivanti/ivanti-linux-22.8r5-b41063-64bit-installer.deb"
-IVANTI_FILE="$DEST/ivanti-linux-22.8r5-64bit.deb"
+IVANTI_FILE="$DEST/ivanti-linux-22.8r5-b41063-64bit-installer.deb"
 
 if [ -f "$IVANTI_FILE" ]; then
     echo "[skip] Ivanti già presente: $IVANTI_FILE"
