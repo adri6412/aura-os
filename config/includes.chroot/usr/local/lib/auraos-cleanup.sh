@@ -156,13 +156,9 @@ fi
 chmod +x /usr/local/bin/apt /usr/local/bin/apt-get 2>/dev/null || true
 
 # --- Rimuovi prompt (live) dal sistema installato ---
-# live-config imposta PS1="(live)$PS1" in /etc/bash.bashrc e/o
-# aggiunge file in /etc/profile.d/. Li ripuliamo tutti.
-for _f in /etc/bash.bashrc /root/.bashrc /etc/skel/.bashrc; do
-    [ -f "$_f" ] && sed -i 's/(live) //g; s/(live)//g' "$_f" || true
-done
-find /home -maxdepth 2 -name ".bashrc" \
-    -exec sed -i 's/(live) //g; s/(live)//g' {} \; 2>/dev/null || true
+# live-boot scrive "live" in /etc/debian_chroot; il PS1 standard Debian
+# ${debian_chroot:+($debian_chroot)} lo mostra come "(live)".
+rm -f /etc/debian_chroot
 rm -f /etc/profile.d/live-prompt.sh /etc/profile.d/live.sh 2>/dev/null || true
 
 # --- Pulizia generale ---
