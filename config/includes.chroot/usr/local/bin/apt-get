@@ -1,0 +1,22 @@
+#!/bin/bash
+# Wrapper apt-get per AuraOS overlayfs.
+# Intercetta 'apt-get upgrade/dist-upgrade' e li redirige a auraos-update.
+# Tutti gli altri sottocomandi passano direttamente ad apt-get.
+
+REAL_APTGET=/usr/bin/apt-get
+
+ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || true)
+[[ "$ROOT_FSTYPE" != "overlay" ]] && exec "$REAL_APTGET" "$@"
+
+case "${1:-}" in
+    upgrade|dist-upgrade)
+        echo "[AuraOS] 'apt-get ${1}' reindirizzato a 'auraos-update'."
+        echo "         Gli aggiornamenti di sistema vanno nel lower layer"
+        echo "         così sopravvivono al riavvio e ad auraos-reset."
+        echo ""
+        exec /usr/local/sbin/auraos-update
+        ;;
+    *)
+        exec "$REAL_APTGET" "$@"
+        ;;
+esac

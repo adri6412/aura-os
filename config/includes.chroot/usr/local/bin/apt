@@ -1,0 +1,26 @@
+#!/bin/bash
+# Wrapper apt per AuraOS overlayfs.
+# Intercetta 'apt upgrade/full-upgrade/dist-upgrade' e li redirige a
+# auraos-update che aggiorna correttamente il lower layer immutabile.
+# Tutti gli altri sottocomandi vengono passati direttamente ad apt.
+#
+# Posizionato in /usr/local/bin/ che ha precedenza su /usr/bin/ nel PATH.
+
+REAL_APT=/usr/bin/apt
+
+# Fuori dall'overlay (chroot, live, sistema non-AuraOS) passa tutto direttamente
+ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || true)
+[[ "$ROOT_FSTYPE" != "overlay" ]] && exec "$REAL_APT" "$@"
+
+case "${1:-}" in
+    upgrade|full-upgrade|dist-upgrade)
+        echo "[AuraOS] 'apt ${1}' reindirizzato a 'auraos-update'."
+        echo "         Gli aggiornamenti di sistema vanno nel lower layer"
+        echo "         così sopravvivono al riavvio e ad auraos-reset."
+        echo ""
+        exec /usr/local/sbin/auraos-update
+        ;;
+    *)
+        exec "$REAL_APT" "$@"
+        ;;
+esac

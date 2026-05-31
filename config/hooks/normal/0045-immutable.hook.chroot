@@ -20,6 +20,9 @@ chmod +x /usr/local/sbin/auraos-reset
 chmod +x /usr/local/sbin/auraos-security-audit 2>/dev/null || true
 chmod +x /usr/local/sbin/auraos-change-kernel
 chmod +x /etc/initramfs-tools/hooks/auraos-tools
+# Wrapper apt/apt-get: intercettano upgrade e lo redirigono ad auraos-update
+chmod +x /usr/local/bin/apt
+chmod +x /usr/local/bin/apt-get
 
 # Symlink in /usr/local/bin per accesso senza path completo
 for tool in auraos-status auraos-update auraos-unlock auraos-lock auraos-reset auraos-change-kernel; do

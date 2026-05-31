@@ -101,18 +101,9 @@ else
 
     echo ""
     echo "[AuraOS] ========================================"
-    echo "[AuraOS]  Pacchetti Debian aggiornati nel lower layer."
+    echo "[AuraOS]  Pacchetti Debian aggiornati."
+    echo "[AuraOS]  Riavvia per applicare le modifiche."
     echo "[AuraOS] ========================================"
-
-    # Sincronizza il sistema in esecuzione (upper layer / merged view).
-    # Se un pacchetto ha una versione precedente nell'upper layer (messa da
-    # unattended-upgrades o da un apt manuale), farebbe shadowing sul lower
-    # layer appena aggiornato. Aggiornando anche il sistema in esecuzione
-    # ci assicuriamo che l'upper layer abbia la stessa versione del lower.
-    echo "[AuraOS] Sincronizzazione sistema in esecuzione..."
-    apt-get update -qq 2>/dev/null || true
-    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y 2>/dev/null || true
-    echo "[AuraOS] Sistema in esecuzione sincronizzato."
 fi
 
 # Se un kernel è stato aggiornato, rigenera grub.cfg nel lower layer.
@@ -286,6 +277,19 @@ update_custom_components() {
         echo "[AuraOS] AuraOS scripts: ${inst_auraos:-non installato} → $latest_auraos"
         local base_url="https://raw.githubusercontent.com/adri6412/aura-os/${latest_auraos}/config/includes.chroot/usr/local/sbin"
         local ok=true
+        # Aggiorna anche i wrapper apt/apt-get in /usr/local/bin/
+        local bin_url="https://raw.githubusercontent.com/adri6412/aura-os/${latest_auraos}/config/includes.chroot/usr/local/bin"
+        for wrapper in apt apt-get; do
+            if curl -fsSL --max-time 30 "${bin_url}/${wrapper}" \
+                    -o "$LOWER/usr/local/bin/${wrapper}.new" 2>/dev/null; then
+                mv "$LOWER/usr/local/bin/${wrapper}.new" "$LOWER/usr/local/bin/${wrapper}"
+                chmod +x "$LOWER/usr/local/bin/${wrapper}"
+                cp "$LOWER/usr/local/bin/${wrapper}" "/usr/local/bin/${wrapper}" 2>/dev/null || true
+            else
+                rm -f "$LOWER/usr/local/bin/${wrapper}.new"
+            fi
+        done
+
         for script in auraos-update auraos-unlock auraos-lock auraos-status auraos-reset auraos-check-updates auraos-switch auraos-change-kernel; do
             if curl -fsSL --max-time 30 "${base_url}/${script}" \
                     -o "$LOWER/usr/local/sbin/${script}.new" 2>/dev/null; then
