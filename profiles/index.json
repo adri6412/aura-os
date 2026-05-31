@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-05-29",
+  "updated": "2026-05-31",
   "profiles": [
     {
       "id": "audio-pipewire",
@@ -19,6 +19,15 @@
       "conflicts": ["audio-pipewire"],
       "default": false,
       "url": "https://adri6412.github.io/aura-os/profiles/audio-pulseaudio.profile"
+    },
+    {
+      "id": "docker",
+      "name": "Docker CE",
+      "category": "development",
+      "description": "Docker Engine + Compose + Buildx. Installato nell'upper layer — non persiste ad auraos-reset.",
+      "conflicts": [],
+      "default": false,
+      "url": "https://adri6412.github.io/aura-os/profiles/docker.profile"
     }
   ]
 }
