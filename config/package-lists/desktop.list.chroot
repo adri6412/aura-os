@@ -53,6 +53,7 @@ network-manager
 network-manager-gnome
 bluez
 blueman
+rfkill
 cups
 system-config-printer
 avahi-daemon
