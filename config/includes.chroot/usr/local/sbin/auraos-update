@@ -96,6 +96,32 @@ if [ "$KERNEL_UPGRADES" -gt 0 ]; then
     echo "[AuraOS] GRUB aggiornato."
 fi
 
+# ── Migrazioni pacchetti ─────────────────────────────────────────────────────
+# Ogni voce è una migrazione one-shot: viene eseguita una volta e poi
+# marcata come completata in /etc/auraos/migrations.done nel lower layer.
+apply_package_migrations() {
+    local LOWER="$1"
+    local DONE_FILE="$LOWER/etc/auraos/migrations.done"
+    touch "$DONE_FILE" 2>/dev/null || true
+
+    run_migration() {
+        local id="$1"; shift
+        grep -qx "$id" "$DONE_FILE" 2>/dev/null && return 0
+        echo "[AuraOS] Migrazione: $id"
+        "$@" && echo "$id" >> "$DONE_FILE" || echo "[AuraOS] WARN: migrazione $id fallita (skip)"
+    }
+
+    # v1.9 — rimuovi USBGuard (bloccava BT e USB senza GUI di gestione)
+    run_migration "remove-usbguard" \
+        bash -c "chroot '$LOWER' dpkg -l usbguard 2>/dev/null | grep -q '^ii' \
+            && chroot '$LOWER' apt-get remove --purge -y usbguard \
+            || true"
+
+    # v1.9 — installa rfkill e bluez se mancanti
+    run_migration "install-bluetooth-tools" \
+        bash -c "chroot '$LOWER' apt-get install -y rfkill bluez 2>/dev/null || true"
+}
+
 # ── Aggiornamento componenti custom ──────────────────────────────────────────
 update_custom_components() {
     local LOWER="$1"
@@ -215,6 +241,9 @@ update_custom_components() {
 
     $updated || echo "[AuraOS] Nessun aggiornamento custom disponibile."
 }
+
+# Esegui migrazioni pacchetti (one-shot, tracciate in migrations.done)
+apply_package_migrations "$LOWER"
 
 # Esegui aggiornamento custom sul lower layer (già sbloccato dal trap)
 update_custom_components "$LOWER"
