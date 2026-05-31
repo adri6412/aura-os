@@ -306,11 +306,15 @@ update_custom_components() {
                 mv "$LOWER/usr/local/sbin/${script}.new" "$LOWER/usr/local/sbin/${script}"
                 chmod +x "$LOWER/usr/local/sbin/${script}"
                 ln -sf "/usr/local/sbin/${script}" "$LOWER/usr/local/bin/${script}" 2>/dev/null || true
-                # Copia anche nel path in esecuzione: se l'upper layer ha una copia
-                # vecchia shadowing il lower layer, senza questa riga il nuovo script
-                # non viene usato finché non si riavvia.
-                cp "$LOWER/usr/local/sbin/${script}" "/usr/local/sbin/${script}" 2>/dev/null || true
-                chmod +x "/usr/local/sbin/${script}" 2>/dev/null || true
+                # Copia nel path in esecuzione per effetto immediato — tranne
+                # auraos-update stesso: sovrascriverlo mentre è in esecuzione
+                # causa bash a leggere il nuovo file a offset sbagliato (glitch).
+                # Il nuovo auraos-update sarà usato alla prossima invocazione
+                # tramite il lower layer aggiornato.
+                if [[ "$script" != "auraos-update" ]]; then
+                    cp "$LOWER/usr/local/sbin/${script}" "/usr/local/sbin/${script}" 2>/dev/null || true
+                    chmod +x "/usr/local/sbin/${script}" 2>/dev/null || true
+                fi
             else
                 echo "[AuraOS] WARN: impossibile scaricare $script, skip."
                 rm -f "$LOWER/usr/local/sbin/${script}.new"
