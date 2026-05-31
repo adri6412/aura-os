@@ -1,0 +1,10 @@
+[Unit]
+Description=ClamAV Weekly Scan
+After=network.target clamav-freshclam.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/clamscan --recursive --infected --bell /home
+IOSchedulingClass=idle
+CPUSchedulingPolicy=idle
+Nice=19

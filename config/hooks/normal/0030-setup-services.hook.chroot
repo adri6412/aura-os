@@ -1,35 +1,15 @@
 #!/bin/bash
-# Hook: configura GDM, servizi e branding — AuraOS
+# Hook: configura LightDM, servizi e branding — AuraOS
 
 set -e
 
 echo "=== [AuraOS] Configurazione servizi ==="
 
-# --- GDM: auto-login utente live + X11 forzato ---
-# AutomaticLogin=user  → live-config crea l'utente "user" a runtime;
-#                        GDM lo logga automaticamente sulla sessione kiosk.
-# WaylandEnable=false  → pkexec (usato da Calamares) non mostra finestre
-#                        su Wayland → schermo nero. X11 obbligatorio nel live.
-# Il cleanup post-install (auraos-cleanup.sh) rimuove AutomaticLogin* e
-# riabilita Wayland per il sistema installato.
-cat > /etc/gdm3/custom.conf <<'EOF'
-[daemon]
-AutomaticLoginEnable=true
-AutomaticLogin=user
-WaylandEnable=false
-
-[security]
-DisallowTCP=true
-
-[xdmcp]
-Enable=false
-
-[chooser]
-Multicast=false
-
-[debug]
-Enable=false
-EOF
+# --- LightDM: config già in includes.chroot/etc/lightdm/ ---
+# lightdm.conf imposta autologin=user + user-session=gnome-xorg (X11 per live).
+# Il cleanup post-install rimuove autologin e cambia sessione in gnome (Wayland).
+# lightdm-gtk-greeter.conf imposta il tema AuraOS per la schermata di login.
+# Nessuna configurazione necessaria qui — i file vengono copiati prima degli hook.
 
 # --- Thunderbird: impostazioni predefinite ---
 THUNDERBIRD_POLICIES_DIR="/usr/lib/thunderbird/distribution"
@@ -137,23 +117,19 @@ mkdir -p /etc/systemd/system/multi-user.target.wants
 ln -sf /lib/systemd/system/bluetooth.service \
     /etc/systemd/system/multi-user.target.wants/bluetooth.service 2>/dev/null || true
 
-# --- Abilita GDM e target grafico ---
+# --- Abilita LightDM e target grafico ---
 # Symlink diretti (systemctl enable non funziona in chroot senza systemd).
 mkdir -p /etc/systemd/system/graphical.target.wants
-ln -sf /lib/systemd/system/gdm3.service \
+ln -sf /lib/systemd/system/lightdm.service \
     /etc/systemd/system/display-manager.service 2>/dev/null || true
-ln -sf /lib/systemd/system/gdm3.service \
-    /etc/systemd/system/graphical.target.wants/gdm3.service 2>/dev/null || true
+ln -sf /lib/systemd/system/lightdm.service \
+    /etc/systemd/system/graphical.target.wants/lightdm.service 2>/dev/null || true
 ln -sfn /lib/systemd/system/graphical.target \
     /etc/systemd/system/default.target 2>/dev/null || true
 
 # /etc/X11/default-display-manager: live-config legge questo file
 # per sapere quale display manager avviare nella sessione live.
-# Senza questo file live-config non sa che deve avviare GDM.
 mkdir -p /etc/X11
-echo "/usr/sbin/gdm3" > /etc/X11/default-display-manager
-
-# Hook live-config per avvio GDM (deve essere eseguibile)
-chmod +x /lib/live/config/9998-start-gdm3 2>/dev/null || true
+echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager
 
 echo "=== [AuraOS] Servizi configurati OK ==="

@@ -20,8 +20,9 @@ dpkg -i "$IVANTI_DEB" 2>/dev/null || true
 apt-get install -f -y 2>/dev/null || true
 echo "[ivanti] Installazione completata"
 
-# ── Abilita il servizio ───────────────────────────────────────────────────────
-systemctl enable pulsesecure.service 2>/dev/null || true
+# ── Servizio installato ma NON avviato automaticamente (~70MB RAM idle) ───────
+# L'utente avvia Ivanti manualmente dall'icona nel dock quando serve la VPN.
+systemctl disable pulsesecure.service 2>/dev/null || true
 
 # ── AppArmor: complain mode per pulsesecure ───────────────────────────────────
 # Il client VPN esegue operazioni (tun, routing, DNS) che i profili enforce

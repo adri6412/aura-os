@@ -58,14 +58,14 @@ intellihide=true
 intellihide-mode='FOCUS_APPLICATION_WINDOWS'
 
 [org/gnome/shell/extensions/blur-my-shell]
-blur-brightness=0.8
-blur-sigma=25
+blur-brightness=0.75
+blur-sigma=8
 hacks-level=1
 
 [org/gnome/shell/extensions/blur-my-shell/panel]
 blur=true
-brightness=0.8
-sigma=20
+brightness=0.75
+sigma=8
 
 [org/gnome/shell/extensions/ding]
 show-trash=true
@@ -74,3 +74,15 @@ icon-size='standard'
 
 [org/gnome/shell/extensions/user-theme]
 name='WhiteSur-Light'
+
+[org/gnome/software]
+allow-updates=false
+download-updates=false
+download-updates-notify=false
+
+[org/freedesktop/tracker/miner/files]
+crawling-interval=-2
+enable-monitors=false
+
+[org/gnome/desktop/search-providers]
+disable-external=true

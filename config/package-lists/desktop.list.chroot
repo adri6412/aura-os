@@ -10,11 +10,7 @@ gnome-disk-utility
 gnome-system-monitor
 gnome-screenshot
 gnome-calculator
-gnome-calendar
 gnome-clocks
-gnome-contacts
-gnome-maps
-gnome-weather
 gnome-font-viewer
 gnome-logs
 file-roller
@@ -23,7 +19,8 @@ totem
 rhythmbox
 gedit
 nautilus
-gdm3
+lightdm
+lightdm-gtk-greeter
 gvfs
 gvfs-backends
 gvfs-fuse

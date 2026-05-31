@@ -1,0 +1,5 @@
+# AuraOS — ZRAM compressed swap
+# Con lz4 il rapporto tipico è 3:1: 4GB ZRAM ≈ 12GB di pagine compresse.
+# vm.swappiness=100 in sysctl assicura che il kernel usi ZRAM aggressivamente.
+ALGO=lz4
+PERCENT=50

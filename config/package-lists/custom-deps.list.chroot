@@ -69,3 +69,7 @@ acl
 
 # GdkPixbuf — thumbnail foto (solitamente già presente con GTK4)
 gir1.2-gdkpixbuf-2.0
+
+# RAM optimization: ZRAM swap compresso (lz4) + protezione OOM
+zram-tools
+earlyoom

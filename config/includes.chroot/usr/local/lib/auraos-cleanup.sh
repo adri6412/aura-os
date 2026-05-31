@@ -48,10 +48,13 @@ rm -f /etc/skel/.config/autostart/calamares-kiosk.desktop
 rm -f /var/lib/AccountsService/users/user
 rm -f /usr/share/applications/calamares.desktop
 
-# --- GDM: rimuovi autologin live e riabilita Wayland ---
-sed -i '/AutomaticLogin/d'        /etc/gdm3/custom.conf 2>/dev/null || true
-sed -i '/AutomaticLoginEnable/d'  /etc/gdm3/custom.conf 2>/dev/null || true
-sed -i 's/WaylandEnable=false/WaylandEnable=true/' /etc/gdm3/custom.conf 2>/dev/null || true
+# --- LightDM: rimuovi autologin live e abilita sessione GNOME Wayland ---
+# user-session=gnome-xorg era necessario nel live (Calamares/pkexec su X11)
+# Sul sistema installato usiamo gnome (GNOME preferisce Wayland automaticamente)
+sed -i '/^autologin-user=/d'         /etc/lightdm/lightdm.conf 2>/dev/null || true
+sed -i '/^autologin-user-timeout=/d' /etc/lightdm/lightdm.conf 2>/dev/null || true
+sed -i 's/^user-session=gnome-xorg$/user-session=gnome/' \
+    /etc/lightdm/lightdm.conf 2>/dev/null || true
 
 # --- Configurazione overlay persistente ───────────────────────────────────────
 # Determina quale partizione usare come upper layer dell'overlay.

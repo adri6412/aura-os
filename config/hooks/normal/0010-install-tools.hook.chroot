@@ -31,9 +31,22 @@ update-mime-database /usr/share/mime/ 2>/dev/null || true
 chmod +x /etc/skel/Desktop/*.desktop 2>/dev/null || true
 chmod +x /usr/local/bin/trust-desktop-files.sh 2>/dev/null || true
 
-# --- Servizi di sicurezza ---
-systemctl enable clamav-daemon 2>/dev/null || true
+# --- ClamAV: aggiornamento DB sempre attivo; scansione settimanale on-demand ---
+# clamav-daemon (100-150MB RAM) sostituito da clamav-scan.timer (0 MB idle).
+systemctl disable clamav-daemon 2>/dev/null || true
 systemctl enable clamav-freshclam 2>/dev/null || true
+systemctl enable clamav-scan.timer 2>/dev/null || true
+
+# --- earlyoom: termina proattivamente il processo più pesante quando RAM < 5% ---
+# Previene il freeze del sistema per OOM; impatto: ~1MB RAM.
+systemctl enable earlyoom 2>/dev/null || true
+
+# --- Tracker: disabilita file indexer a livello sistema ---
+# tracker-miner-fs-3 (100-300MB) parte all'avvio per ogni utente.
+# --global applica la maschera a tutti gli utenti senza bisogno di login attivo.
+systemctl --global mask tracker-miner-fs-3.service \
+                          tracker-extract-3.service \
+                          tracker-miner-rss-3.service 2>/dev/null || true
 
 ufw default deny incoming
 ufw default allow outgoing
