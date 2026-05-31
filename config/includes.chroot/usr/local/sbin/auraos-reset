@@ -18,9 +18,20 @@ CONF="$LOWER/etc/auraos/overlay.conf"
 SUBDIR=".auraos-overlay"
 [ -f "$CONF" ] && SUBDIR=$(grep OVERLAY_SUBDIR "$CONF" | cut -d= -f2 | tr -d '"')
 
-echo "[AuraOS] ATTENZIONE: questa operazione eliminerà tutte le modifiche"
-echo "         di sistema accumulate nell'upper layer."
-echo "         I dati in /home NON vengono toccati."
+echo "[AuraOS] !! ATTENZIONE: RESET DI SISTEMA !!"
+echo ""
+echo "  Questa operazione azzera l'upper layer (partizione dati)."
+echo "  Verranno ELIMINATI:"
+echo "    - App installate dallo store (Flatpak, GNOME Software)"
+echo "    - Pacchetti .deb installati manualmente"
+echo "    - Modifiche a configurazioni di sistema"
+echo "    - Aggiornamenti non ancora applicati al lower layer"
+echo ""
+echo "  NON verranno toccati:"
+echo "    - I dati in /home (documenti, foto, ecc.)"
+echo "    - Il sistema base (lower layer, aggiornato da auraos-update)"
+echo ""
+echo "  Dopo il riavvio il sistema tornerà allo stato del lower layer."
 echo ""
 read -rp "Conferma (scrivi 'reset'): " answer
 [ "$answer" != "reset" ] && { echo "Annullato."; exit 0; }
