@@ -14,11 +14,17 @@ ROOT_FSTYPE=$(findmnt -n -o FSTYPE / 2>/dev/null || true)
 
 case "${1:-}" in
     upgrade|full-upgrade|dist-upgrade)
-        echo "[AuraOS] 'apt ${1}' reindirizzato a 'auraos-update'."
-        echo "         Gli aggiornamenti di sistema vanno nel lower layer"
-        echo "         così sopravvivono al riavvio e ad auraos-reset."
+        echo "[AuraOS] Aggiornamento in due fasi:"
+        echo "  1. Lower layer (sistema base, sopravvive ad auraos-reset)"
+        echo "  2. Sistema in esecuzione (pacchetti utente nell'upper layer)"
         echo ""
-        exec /usr/local/sbin/auraos-update
+        # Fase 1: aggiorna il lower layer immutabile
+        /usr/local/sbin/auraos-update
+        # Fase 2: aggiorna anche il sistema in esecuzione
+        # (pacchetti installati dall'utente che vivono nell'upper layer)
+        echo ""
+        echo "[AuraOS] Aggiornamento pacchetti nel sistema in esecuzione..."
+        exec "$REAL_APT" "$@"
         ;;
     *)
         exec "$REAL_APT" "$@"
