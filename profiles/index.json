@@ -28,6 +28,15 @@
       "conflicts": [],
       "default": false,
       "url": "https://adri6412.github.io/aura-os/profiles/docker.profile"
+    },
+    {
+      "id": "winboat",
+      "name": "WinBoat",
+      "category": "development",
+      "description": "Windows in QEMU/Docker con FreeRDP. Richiede il profilo Docker CE installato.",
+      "conflicts": [],
+      "default": false,
+      "url": "https://adri6412.github.io/aura-os/profiles/winboat.profile"
     }
   ]
 }
