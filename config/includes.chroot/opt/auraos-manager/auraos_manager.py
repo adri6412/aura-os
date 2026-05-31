@@ -705,26 +705,26 @@ class KernelPage(Gtk.Box):
         except Exception:
             pass
 
-        # Kernel installati tramite dpkg
+        # Kernel installati: rilevati da /boot/vmlinuz-* (merged view).
+        # NON usare dpkg -l perché il database dpkg nel merged view può essere
+        # quello dell'upper layer, che non conosce i kernel installati nel
+        # lower layer via chroot (auraos-change-kernel install).
+        # Il merged view di /boot/ mostra correttamente i file di entrambi i layer.
         installed = []
         try:
-            r = subprocess.run(["dpkg", "-l"], capture_output=True, text=True)
-            for line in r.stdout.splitlines():
-                if not line.startswith("ii"):
+            import glob
+            _re_ver = re.compile(r"^\d+\.\d+.*-amd64$")
+            for vmlinuz in sorted(glob.glob("/boot/vmlinuz-*"), reverse=True):
+                ver = os.path.basename(vmlinuz)[len("vmlinuz-"):]
+                if not _re_ver.match(ver):
                     continue
-                parts = line.split()
-                if len(parts) < 2:
-                    continue
-                pkg = parts[1].split(":")[0]   # rimuove eventuale :amd64
-                if _RE_KERN_PKG.match(pkg):
-                    ver = pkg[len("linux-image-"):]
-                    installed.append({"pkg": pkg, "ver": ver,
-                                      "running": ver == running})
-            installed.sort(key=lambda x: x["ver"], reverse=True)
+                pkg = f"linux-image-{ver}"
+                installed.append({"pkg": pkg, "ver": ver,
+                                   "running": ver == running})
         except Exception:
             pass
 
-        # Kernel disponibili tramite apt-cache (non ancora installati)
+        # Kernel disponibili: apt-cache filtrato per versioni non ancora in /boot/
         available = []
         try:
             r = subprocess.run(
