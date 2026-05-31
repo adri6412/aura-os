@@ -58,13 +58,17 @@ fi
 # ── Risultato ─────────────────────────────────────────────────────────────────
 if [[ ${#UPDATES[@]} -eq 0 ]]; then
     [[ "$MODE" != "check" ]] && echo "[AuraOS] Componenti custom aggiornati."
-    rm -f "$UPDATE_FLAG"
+    [[ $EUID -eq 0 ]] && rm -f "$UPDATE_FLAG" || true
     exit 0
 fi
 
 # Aggiornamenti disponibili
-mkdir -p "$RUN_DIR"
-printf '%s\n' "${UPDATES[@]}" > "$UPDATE_FLAG"
+# Il flag file viene scritto solo se root (timer systemd); il manager
+# chiama questo script come utente normale e usa solo exit code + stdout.
+if [[ $EUID -eq 0 ]]; then
+    mkdir -p "$RUN_DIR"
+    printf '%s\n' "${UPDATES[@]}" > "$UPDATE_FLAG"
+fi
 
 if [[ "$MODE" != "check" ]]; then
     echo "[AuraOS] Aggiornamenti disponibili:"
