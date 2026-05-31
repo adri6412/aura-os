@@ -24,44 +24,80 @@ BASE="https://raw.githubusercontent.com/adri6412/aura-os/${TAG}/config/includes.
 SCRIPTS=(auraos-update auraos-check-updates auraos-switch auraos-lock auraos-unlock
          auraos-status auraos-reset auraos-change-kernel)
 
+OVERLAY=false
 if [[ -d "$LOWER/usr" ]]; then
-    echo "[bootstrap] Overlay attivo — aggiorno nel lower layer ($LOWER)."
+    echo "[bootstrap] Overlay attivo — aggiorno lower layer e sistema in esecuzione."
     mount -o remount,rw "$LOWER"
-    TARGET="$LOWER"
+    OVERLAY=true
     restore_ro() { mount -o remount,ro "$LOWER" 2>/dev/null || true; }
     trap restore_ro EXIT
 else
     echo "[bootstrap] Overlay non attivo — aggiorno direttamente."
-    TARGET=""
 fi
+
+install_script() {
+    local src="$1" dst_lower="$2" dst_live="$3"
+    local tmp
+    tmp=$(mktemp)
+    if curl -fsSL --max-time 30 "$src" -o "$tmp" 2>/dev/null; then
+        # Scrivi nel lower layer (persistenza dopo riavvio)
+        cp "$tmp" "$dst_lower"
+        chmod +x "$dst_lower"
+        # Scrivi nel path in esecuzione (merged view) per effetto immediato.
+        # Senza questo, se l'upper layer ha una copia vecchia la shadowing
+        # e il lower layer aggiornato non viene usato finché non si riavvia.
+        cp "$tmp" "$dst_live" 2>/dev/null || true
+        chmod +x "$dst_live" 2>/dev/null || true
+        rm -f "$tmp"
+        echo "OK"
+    else
+        rm -f "$tmp"
+        echo "ERRORE (skip)"
+    fi
+}
 
 for script in "${SCRIPTS[@]}"; do
     printf "[bootstrap]  %-30s" "$script"
-    if curl -fsSL --max-time 30 "${BASE}/usr/local/sbin/${script}" \
-            -o "${TARGET}/usr/local/sbin/${script}" 2>/dev/null; then
-        chmod +x "${TARGET}/usr/local/sbin/${script}"
-        ln -sf "/usr/local/sbin/${script}" "${TARGET}/usr/local/bin/${script}" 2>/dev/null || true
-        echo "OK"
+    if $OVERLAY; then
+        install_script \
+            "${BASE}/usr/local/sbin/${script}" \
+            "$LOWER/usr/local/sbin/${script}" \
+            "/usr/local/sbin/${script}"
+        ln -sf "/usr/local/sbin/${script}" "$LOWER/usr/local/bin/${script}" 2>/dev/null || true
+        ln -sf "/usr/local/sbin/${script}" "/usr/local/bin/${script}" 2>/dev/null || true
     else
-        echo "ERRORE (skip)"
+        install_script \
+            "${BASE}/usr/local/sbin/${script}" \
+            "/usr/local/sbin/${script}" \
+            "/usr/local/sbin/${script}"
     fi
 done
 
-# Aggiorna anche il manager (file Python — contiene le tab UI)
+# Manager (file Python — contiene le tab UI)
 printf "[bootstrap]  %-30s" "auraos_manager.py"
-if curl -fsSL --max-time 30 "${BASE}/opt/auraos-manager/auraos_manager.py" \
-        -o "${TARGET}/opt/auraos-manager/auraos_manager.py" 2>/dev/null; then
-    chmod +x "${TARGET}/opt/auraos-manager/auraos_manager.py"
-    echo "OK"
+if $OVERLAY; then
+    install_script \
+        "${BASE}/opt/auraos-manager/auraos_manager.py" \
+        "$LOWER/opt/auraos-manager/auraos_manager.py" \
+        "/opt/auraos-manager/auraos_manager.py"
 else
-    echo "ERRORE (skip)"
+    install_script \
+        "${BASE}/opt/auraos-manager/auraos_manager.py" \
+        "/opt/auraos-manager/auraos_manager.py" \
+        "/opt/auraos-manager/auraos_manager.py"
 fi
 
-VFILE="${TARGET}/etc/auraos/versions.conf"
+# Aggiorna versions.conf nel lower layer
+if $OVERLAY; then
+    VFILE="$LOWER/etc/auraos/versions.conf"
+else
+    VFILE="/etc/auraos/versions.conf"
+fi
 if [[ -f "$VFILE" ]]; then
     sed -i "s/^AURAOS_VERSION=.*/AURAOS_VERSION=\"${TAG}\"/" "$VFILE"
-    echo "[bootstrap] versions.conf aggiornato → AURAOS_VERSION=\"$TAG\""
+    echo "[bootstrap] versions.conf → AURAOS_VERSION=\"$TAG\""
 fi
 
 echo ""
-echo "[bootstrap] Fatto. Riavvia il manager per vedere le modifiche."
+echo "[bootstrap] Script aggiornati. Esegui ora: sudo auraos-update"
+echo "[bootstrap] (applicherà le migrazioni pendenti)"

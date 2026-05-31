@@ -214,8 +214,12 @@ update_custom_components() {
                     -o "$LOWER/usr/local/sbin/${script}.new" 2>/dev/null; then
                 mv "$LOWER/usr/local/sbin/${script}.new" "$LOWER/usr/local/sbin/${script}"
                 chmod +x "$LOWER/usr/local/sbin/${script}"
-                # Crea/aggiorna il symlink in /usr/local/bin (necessario per nuovi script)
                 ln -sf "/usr/local/sbin/${script}" "$LOWER/usr/local/bin/${script}" 2>/dev/null || true
+                # Copia anche nel path in esecuzione: se l'upper layer ha una copia
+                # vecchia shadowing il lower layer, senza questa riga il nuovo script
+                # non viene usato finché non si riavvia.
+                cp "$LOWER/usr/local/sbin/${script}" "/usr/local/sbin/${script}" 2>/dev/null || true
+                chmod +x "/usr/local/sbin/${script}" 2>/dev/null || true
             else
                 echo "[AuraOS] WARN: impossibile scaricare $script, skip."
                 rm -f "$LOWER/usr/local/sbin/${script}.new"
@@ -247,6 +251,8 @@ update_custom_components() {
             mv "$LOWER/opt/auraos-manager/auraos_manager.py.new" \
                "$LOWER/opt/auraos-manager/auraos_manager.py"
             chmod +x "$LOWER/opt/auraos-manager/auraos_manager.py"
+            cp "$LOWER/opt/auraos-manager/auraos_manager.py" \
+               "/opt/auraos-manager/auraos_manager.py" 2>/dev/null || true
             echo "[AuraOS] Manager UI aggiornato."
         else
             rm -f "$LOWER/opt/auraos-manager/auraos_manager.py.new"
