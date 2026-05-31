@@ -9,6 +9,7 @@ from gi.repository import Gtk, Adw, GLib, Gio
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -19,10 +20,15 @@ VERSIONS_FILE = "/etc/auraos/versions.conf"
 ACTIVE_FILE   = "/etc/auraos/active-profiles.conf"
 
 # Path completi — /usr/local/sbin non è nel PATH degli utenti normali
-BIN_CHECK_UPDATES = "/usr/local/sbin/auraos-check-updates"
-BIN_SWITCH        = "/usr/local/sbin/auraos-switch"
-BIN_UPDATE        = "/usr/local/sbin/auraos-update"
-BIN_STATUS        = "/usr/local/sbin/auraos-status"
+BIN_CHECK_UPDATES  = "/usr/local/sbin/auraos-check-updates"
+BIN_SWITCH         = "/usr/local/sbin/auraos-switch"
+BIN_UPDATE         = "/usr/local/sbin/auraos-update"
+BIN_STATUS         = "/usr/local/sbin/auraos-status"
+BIN_CHANGE_KERNEL  = "/usr/local/sbin/auraos-change-kernel"
+
+# Regex: solo pacchetti kernel con versione esplicita per amd64
+# es. linux-image-6.1.0-30-amd64, linux-image-6.6.0-1-amd64
+_RE_KERN_PKG = re.compile(r"^linux-image-\d+\.\d+.*-amd64$")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -637,6 +643,233 @@ class SystemPage(Gtk.Box):
             row.set_subtitle(ver)
 
 
+# ── Tab Kernel ────────────────────────────────────────────────────────────────
+
+class KernelPage(Gtk.Box):
+    def __init__(self, win):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.win = win
+        self._inst_rows = []
+        self._avail_rows = []
+
+        toolbar = Adw.HeaderBar()
+        toolbar.set_show_end_title_buttons(False)
+        refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic",
+                                 tooltip_text="Aggiorna lista")
+        refresh_btn.connect("clicked", lambda *_: self._load())
+        toolbar.pack_end(refresh_btn)
+        self.append(toolbar)
+
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
+                          margin_top=12, margin_bottom=12,
+                          margin_start=12, margin_end=12)
+        scroll.set_child(content)
+        self.append(scroll)
+
+        self._inst_group = Adw.PreferencesGroup(title="Kernel installati")
+        content.append(self._inst_group)
+
+        self._avail_group = Adw.PreferencesGroup(title="Kernel disponibili",
+                                                  margin_top=8)
+        content.append(self._avail_group)
+
+        log_group = Adw.PreferencesGroup(title="Output", margin_top=8)
+        content.append(log_group)
+        sw = Gtk.ScrolledWindow(height_request=150)
+        self._log_buf = Gtk.TextBuffer()
+        self._log_view = Gtk.TextView(
+            buffer=self._log_buf, editable=False, monospace=True,
+            wrap_mode=Gtk.WrapMode.WORD_CHAR,
+            css_classes=["card"], margin_top=4
+        )
+        sw.set_child(self._log_view)
+        log_group.add(sw)
+
+        self._load()
+
+    # ── Fetch dati (thread) ───────────────────────────────────────────────────
+
+    def _load(self):
+        self._clear_group(self._inst_group, self._inst_rows)
+        self._clear_group(self._avail_group, self._avail_rows)
+        self._add_placeholder(self._inst_group, self._inst_rows, "Caricamento…")
+        self._add_placeholder(self._avail_group, self._avail_rows, "Caricamento…")
+        threading.Thread(target=self._fetch, daemon=True).start()
+
+    def _fetch(self):
+        running = ""
+        try:
+            running = subprocess.run(
+                ["uname", "-r"], capture_output=True, text=True
+            ).stdout.strip()
+        except Exception:
+            pass
+
+        # Kernel installati tramite dpkg
+        installed = []
+        try:
+            r = subprocess.run(["dpkg", "-l"], capture_output=True, text=True)
+            for line in r.stdout.splitlines():
+                if not line.startswith("ii"):
+                    continue
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                pkg = parts[1].split(":")[0]   # rimuove eventuale :amd64
+                if _RE_KERN_PKG.match(pkg):
+                    ver = pkg[len("linux-image-"):]
+                    installed.append({"pkg": pkg, "ver": ver,
+                                      "running": ver == running})
+            installed.sort(key=lambda x: x["ver"], reverse=True)
+        except Exception:
+            pass
+
+        # Kernel disponibili tramite apt-cache (non ancora installati)
+        available = []
+        try:
+            r = subprocess.run(
+                ["apt-cache", "search", "^linux-image"],
+                capture_output=True, text=True
+            )
+            inst_pkgs = {k["pkg"] for k in installed}
+            for line in r.stdout.splitlines():
+                parts = line.split(" - ", 1)
+                if len(parts) < 2:
+                    continue
+                pkg  = parts[0].strip()
+                desc = parts[1].strip()
+                if _RE_KERN_PKG.match(pkg) and pkg not in inst_pkgs:
+                    available.append({"pkg": pkg, "desc": desc})
+            available.sort(key=lambda x: x["pkg"], reverse=True)
+            available = available[:20]
+        except Exception:
+            pass
+
+        GLib.idle_add(self._populate, installed, available)
+
+    def _populate(self, installed, available):
+        self._clear_group(self._inst_group, self._inst_rows)
+        self._clear_group(self._avail_group, self._avail_rows)
+
+        n_inst = len(installed)
+
+        if not installed:
+            self._add_placeholder(self._inst_group, self._inst_rows,
+                                  "Nessun kernel trovato.")
+        for k in installed:
+            row = Adw.ActionRow(title=k["pkg"])
+            if k["running"]:
+                row.add_suffix(Gtk.Label(label="In uso",
+                                         css_classes=["success"],
+                                         valign=Gtk.Align.CENTER))
+            btn = Gtk.Button(label="Rimuovi", valign=Gtk.Align.CENTER,
+                             css_classes=["destructive-action"])
+            if n_inst <= 1:
+                btn.set_sensitive(False)
+                btn.set_tooltip_text("Non rimuovibile: è l'unico kernel installato")
+            else:
+                btn.connect("clicked", self._on_remove, k["pkg"])
+            row.add_suffix(btn)
+            self._inst_group.add(row)
+            self._inst_rows.append(row)
+
+        if not available:
+            self._add_placeholder(self._avail_group, self._avail_rows,
+                                  "Nessun kernel aggiuntivo disponibile.")
+        for k in available:
+            row = Adw.ActionRow(title=k["pkg"], subtitle=k["desc"])
+            btn = Gtk.Button(label="Installa", valign=Gtk.Align.CENTER,
+                             css_classes=["suggested-action"])
+            btn.connect("clicked", self._on_install, k["pkg"])
+            row.add_suffix(btn)
+            self._avail_group.add(row)
+            self._avail_rows.append(row)
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _clear_group(self, group, rows):
+        for row in rows:
+            group.remove(row)
+        rows.clear()
+
+    def _add_placeholder(self, group, rows, text):
+        row = Adw.ActionRow(title=text)
+        row.set_sensitive(False)
+        group.add(row)
+        rows.append(row)
+
+    # ── Azioni ────────────────────────────────────────────────────────────────
+
+    def _on_install(self, btn, pkg):
+        dialog = Adw.AlertDialog(
+            heading="Installare kernel?",
+            body=f"{pkg}\n\nL'operazione richiede alcuni minuti.\n"
+                 f"Riavvia per usare il nuovo kernel."
+        )
+        dialog.add_response("cancel", "Annulla")
+        dialog.add_response("ok", "Installa")
+        dialog.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
+        dialog.connect("response", self._on_confirm, "install", pkg)
+        dialog.present(self.win)
+
+    def _on_remove(self, btn, pkg):
+        dialog = Adw.AlertDialog(
+            heading="Rimuovere kernel?",
+            body=f"{pkg}\n\nIl kernel verrà rimosso e il menu di avvio aggiornato.\n"
+                 f"Riavvia per applicare le modifiche."
+        )
+        dialog.add_response("cancel", "Annulla")
+        dialog.add_response("ok", "Rimuovi")
+        dialog.set_response_appearance("ok", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", self._on_confirm, "remove", pkg)
+        dialog.present(self.win)
+
+    def _on_confirm(self, dialog, response, action, pkg):
+        if response != "ok":
+            return
+        self._log_buf.set_text("")
+        label = "Installazione" if action == "install" else "Rimozione"
+        self.win.show_progress(f"{label} {pkg}…")
+        threading.Thread(
+            target=self._do_action, args=(action, pkg), daemon=True
+        ).start()
+
+    def _do_action(self, action, pkg):
+        rc = run_privileged(
+            [BIN_CHANGE_KERNEL, action, pkg],
+            output_callback=lambda l: GLib.idle_add(self._append_log, l)
+        )
+        GLib.idle_add(self._after_action, rc, action, pkg)
+
+    def _append_log(self, line):
+        end = self._log_buf.get_end_iter()
+        self._log_buf.insert(end, line + "\n")
+        adj = self._log_view.get_parent().get_vadjustment()
+        adj.set_value(adj.get_upper())
+
+    def _after_action(self, rc, action, pkg):
+        self.win.hide_progress()
+        if rc == 0:
+            verb = "installato" if action == "install" else "rimosso"
+            dialog = Adw.AlertDialog(
+                heading="Riavvio richiesto",
+                body=f"Kernel {verb}.\n"
+                     f"Riavvia per aggiornare il menu di avvio."
+            )
+            dialog.add_response("later", "Dopo")
+            dialog.add_response("reboot", "Riavvia ora")
+            dialog.set_response_appearance("reboot", Adw.ResponseAppearance.SUGGESTED)
+            dialog.connect("response",
+                           lambda d, r: subprocess.run(["systemctl", "reboot"],
+                                                       check=False)
+                           if r == "reboot" else None)
+            dialog.present(self.win)
+            self._load()
+        else:
+            self.win.show_error(f"Operazione fallita su {pkg}.")
+
+
 # ── Finestra principale ───────────────────────────────────────────────────────
 
 class AuraOSManagerWindow(Adw.ApplicationWindow):
@@ -676,6 +909,11 @@ class AuraOSManagerWindow(Adw.ApplicationWindow):
         system_page = SystemPage(self)
         self._stack.add_titled_with_icon(
             system_page, "system", "Sistema", "drive-harddisk-symbolic"
+        )
+
+        kernel_page = KernelPage(self)
+        self._stack.add_titled_with_icon(
+            kernel_page, "kernel", "Kernel", "system-run-symbolic"
         )
 
         security_page = SecurityPage(self)
