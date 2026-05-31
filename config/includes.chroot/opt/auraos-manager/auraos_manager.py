@@ -13,6 +13,7 @@ import re
 import subprocess
 import tempfile
 import threading
+import time
 import urllib.request
 
 INDEX_URL     = "https://adri6412.github.io/aura-os/profiles/index.json"
@@ -58,8 +59,15 @@ def read_active_profiles():
     return active
 
 
+def _nocache_url(url):
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}_={int(time.time())}"
+
+
 def fetch_json(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "AuraOS-Manager/1.0"})
+    req = urllib.request.Request(
+        _nocache_url(url), headers={"User-Agent": "AuraOS-Manager/1.0"}
+    )
     with urllib.request.urlopen(req, timeout=10) as r:
         return json.loads(r.read())
 
@@ -207,7 +215,8 @@ class ProfilesPage(Gtk.Box):
                     prefix=f"auraos-{profile['id']}-"
                 )
                 req = urllib.request.Request(
-                    profile["url"], headers={"User-Agent": "AuraOS-Manager/1.0"}
+                    _nocache_url(profile["url"]),
+                    headers={"User-Agent": "AuraOS-Manager/1.0"}
                 )
                 with urllib.request.urlopen(req, timeout=15) as r:
                     tmp.write(r.read())
