@@ -59,6 +59,9 @@ auraos_finalize_chroot() {
         usr/local/sbin/auraos-setup-overlay
         usr/local/bin/apt
         usr/local/bin/apt-get
+        etc/skel/Desktop/adguardhome.desktop
+        etc/skel/Desktop/appstore.desktop
+        usr/share/applications/adguardhome.desktop
     )
     for f in "${executables[@]}"; do
         [[ -f "$C/$f" ]] && chmod +x "$C/$f"

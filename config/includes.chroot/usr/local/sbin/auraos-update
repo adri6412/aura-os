@@ -228,6 +228,28 @@ apply_package_migrations() {
     #   run_migration "vX.Y-descrizione" bash -c "..."
     # REGOLA: ogni modifica a $LOWER/X va replicata anche su /X (path corrente).
 
+    # ── v3.6 ─────────────────────────────────────────────────────────────────
+    # I .desktop file in skel/Desktop erano 100644: Calamares li copia agli
+    # utenti non eseguibili e GNOME li mostra come "non trusted". Fix: chmod +x
+    # nei file skel (lower layer) e in tutti i Desktop degli utenti esistenti.
+    run_migration "v3.6-fix-desktop-permissions" \
+        bash -c "
+            for f in '$LOWER/etc/skel/Desktop/adguardhome.desktop' \
+                     '$LOWER/etc/skel/Desktop/appstore.desktop' \
+                     '$LOWER/usr/share/applications/adguardhome.desktop'; do
+                [ -f \"\$f\" ] && chmod +x \"\$f\" || true
+            done
+            # Replica skel nel path corrente
+            for f in /etc/skel/Desktop/adguardhome.desktop \
+                     /etc/skel/Desktop/appstore.desktop \
+                     /usr/share/applications/adguardhome.desktop; do
+                [ -f \"\$f\" ] && chmod +x \"\$f\" || true
+            done
+            # Fix Desktop di ogni utente già creato
+            find /home -maxdepth 2 -name 'adguardhome.desktop' -o \
+                       -name 'appstore.desktop' 2>/dev/null \
+                | xargs -r chmod +x 2>/dev/null || true"
+
     chroot_umount
     unset SYSTEMD_OFFLINE
 }
