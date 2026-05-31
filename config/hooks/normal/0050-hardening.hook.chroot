@@ -23,50 +23,6 @@ if [ -f "$GRUB_DEFAULT" ]; then
     update-grub 2>/dev/null || true
 fi
 
-# ── USBGuard ──────────────────────────────────────────────────────────────────
-echo "[hardening] Configurazione USBGuard..."
-systemctl enable usbguard 2>/dev/null || true
-
-# Policy di default: allow-all al primo avvio (l'utente può restringere poi)
-# Alla prima connessione di un nuovo dispositivo, USBGuard applica ImplicitPolicyTarget
-USBGUARD_CONF=/etc/usbguard/usbguard-daemon.conf
-if [ -f "$USBGUARD_CONF" ]; then
-    # ImplicitPolicyTarget=allow: dispositivi non in lista sono permessi (monitor-only).
-    # Usare sed per sostituire se esiste, altrimenti aggiungere in fondo.
-    if grep -q "^ImplicitPolicyTarget=" "$USBGUARD_CONF"; then
-        sed -i 's/^ImplicitPolicyTarget=.*/ImplicitPolicyTarget=allow/' "$USBGUARD_CONF"
-    else
-        echo "ImplicitPolicyTarget=allow" >> "$USBGUARD_CONF"
-    fi
-fi
-
-# Regole USBGuard — permettono HID, hub, Bluetooth e storage comuni.
-# La regola chiave per il BT usa il vendor ID Intel (8087:*) perché alcuni
-# controller AX201/AX200 non espongono correttamente la classe E0:01:01
-# a livello di interfaccia USB, quindi la regola by-class non matchava.
-mkdir -p /etc/usbguard
-cat > /etc/usbguard/rules.conf <<'RULES'
-# AuraOS USBGuard rules
-
-# Tastiere e mouse (HID)
-allow with-interface equals { 03:00:01 }
-allow with-interface equals { 03:01:01 }
-allow with-interface equals { 03:00:02 }
-allow with-interface equals { 03:01:02 }
-
-# Hubs USB
-allow with-interface equals { 09:00:00 }
-
-# Bluetooth — Intel (AX200/AX201/AX210 e successori) per vendor ID
-# Necessario: alcuni controller non espongono la classe E0:01:01 come interfaccia
-allow id 8087:*
-
-# Bluetooth standard (tutti gli altri controller BT con classe USB corretta)
-allow with-interface match { e0:01:01 }
-
-# Storage USB (necessario per pennette, dischi esterni, ecc.)
-allow with-interface match { 08:*:* }
-RULES
 
 # ── Firejail ─────────────────────────────────────────────────────────────────
 echo "[hardening] Configurazione Firejail sandbox..."

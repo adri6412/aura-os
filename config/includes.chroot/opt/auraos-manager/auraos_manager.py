@@ -388,7 +388,6 @@ SECURITY_SERVICES = [
     ("clamav-daemon", "Antivirus ClamAV",  "security-medium-symbolic"),
     ("AdGuardHome",   "AdGuard Home DNS",  "network-wireless-symbolic"),
     ("apparmor",      "AppArmor",          "security-high-symbolic"),
-    ("usbguard",      "USBGuard",          "drive-removable-media-symbolic"),
     ("fail2ban",      "Fail2Ban",          "dialog-warning-symbolic"),
 ]
 
