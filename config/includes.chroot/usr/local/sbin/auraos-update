@@ -132,7 +132,7 @@ update_custom_components() {
     local updated=false
 
     # ── AdGuardHome ───────────────────────────────────────────────────────────
-    if [[ -n "$latest_agh" && -n "$inst_agh" && "$latest_agh" != "$inst_agh" ]]; then
+    if [[ -n "$latest_agh" && ( -z "$inst_agh" || "$latest_agh" != "$inst_agh" ) ]]; then
         echo "[AuraOS] AdGuardHome: $inst_agh → $latest_agh"
         local ver="${latest_agh#v}"
         local url="https://github.com/AdguardTeam/AdGuardHome/releases/download/${latest_agh}/AdGuardHome_linux_amd64.tar.gz"
@@ -153,8 +153,8 @@ update_custom_components() {
     fi
 
     # ── Script auraos-* ───────────────────────────────────────────────────────
-    if [[ -n "$latest_auraos" && -n "$inst_auraos" && "$latest_auraos" != "$inst_auraos" ]]; then
-        echo "[AuraOS] AuraOS scripts: $inst_auraos → $latest_auraos"
+    if [[ -n "$latest_auraos" && ( -z "$inst_auraos" || "$latest_auraos" != "$inst_auraos" ) ]]; then
+        echo "[AuraOS] AuraOS scripts: ${inst_auraos:-non installato} → $latest_auraos"
         local base_url="https://raw.githubusercontent.com/adri6412/aura-os/${latest_auraos}/config/includes.chroot/usr/local/sbin"
         local ok=true
         for script in auraos-update auraos-unlock auraos-lock auraos-status auraos-reset auraos-check-updates auraos-switch auraos-change-kernel; do

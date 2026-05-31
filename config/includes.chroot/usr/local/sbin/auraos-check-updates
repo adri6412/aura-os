@@ -47,12 +47,12 @@ LATEST_AURAOS=$(github_latest "adri6412/aura-os")
 
 UPDATES=()
 
-if [[ -n "$LATEST_AGH" && -n "$INSTALLED_AGH" && "$LATEST_AGH" != "$INSTALLED_AGH" ]]; then
-    UPDATES+=("AdGuardHome: $INSTALLED_AGH → $LATEST_AGH")
+if [[ -n "$LATEST_AGH" && ( -z "$INSTALLED_AGH" || "$LATEST_AGH" != "$INSTALLED_AGH" ) ]]; then
+    UPDATES+=("AdGuardHome: ${INSTALLED_AGH:-non installato} → $LATEST_AGH")
 fi
 
-if [[ -n "$LATEST_AURAOS" && -n "$INSTALLED_AURAOS" && "$LATEST_AURAOS" != "$INSTALLED_AURAOS" ]]; then
-    UPDATES+=("AuraOS scripts: $INSTALLED_AURAOS → $LATEST_AURAOS")
+if [[ -n "$LATEST_AURAOS" && ( -z "$INSTALLED_AURAOS" || "$LATEST_AURAOS" != "$INSTALLED_AURAOS" ) ]]; then
+    UPDATES+=("AuraOS scripts: ${INSTALLED_AURAOS:-non installato} → $LATEST_AURAOS")
 fi
 
 # ── Risultato ─────────────────────────────────────────────────────────────────
