@@ -210,6 +210,26 @@ apply_package_migrations() {
             chmod +x '$LOWER/usr/local/bin/apt-get' 2>/dev/null || true
             chmod +x /usr/local/bin/apt /usr/local/bin/apt-get 2>/dev/null || true"
 
+    # ── v3.4 ─────────────────────────────────────────────────────────────────
+    # live-config imposta PS1="(live)$PS1" nei file bashrc. Nei sistemi
+    # installati il prefisso rimane se auraos-cleanup non l'ha già rimosso.
+    run_migration "v3.4-remove-live-prompt" \
+        bash -c "
+            for _f in '$LOWER/etc/bash.bashrc' '$LOWER/root/.bashrc' '$LOWER/etc/skel/.bashrc'; do
+                [ -f \"\$_f\" ] && sed -i 's/(live) //g; s/(live)//g' \"\$_f\" || true
+            done
+            find '$LOWER/home' -maxdepth 2 -name '.bashrc' \
+                -exec sed -i 's/(live) //g; s/(live)//g' {} \; 2>/dev/null || true
+            rm -f '$LOWER/etc/profile.d/live-prompt.sh' \
+                  '$LOWER/etc/profile.d/live.sh' 2>/dev/null || true
+            # Replica nel path corrente
+            for _f in /etc/bash.bashrc /root/.bashrc /etc/skel/.bashrc; do
+                [ -f \"\$_f\" ] && sed -i 's/(live) //g; s/(live)//g' \"\$_f\" || true
+            done
+            find /home -maxdepth 2 -name '.bashrc' \
+                -exec sed -i 's/(live) //g; s/(live)//g' {} \; 2>/dev/null || true
+            rm -f /etc/profile.d/live-prompt.sh /etc/profile.d/live.sh 2>/dev/null || true"
+
     # ── future ───────────────────────────────────────────────────────────────
     # Aggiungere nuove migrazioni qui:
     #   run_migration "vX.Y-descrizione" bash -c "..."

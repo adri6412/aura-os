@@ -155,6 +155,16 @@ fi
 # --- Permessi wrapper apt ---
 chmod +x /usr/local/bin/apt /usr/local/bin/apt-get 2>/dev/null || true
 
+# --- Rimuovi prompt (live) dal sistema installato ---
+# live-config imposta PS1="(live)$PS1" in /etc/bash.bashrc e/o
+# aggiunge file in /etc/profile.d/. Li ripuliamo tutti.
+for _f in /etc/bash.bashrc /root/.bashrc /etc/skel/.bashrc; do
+    [ -f "$_f" ] && sed -i 's/(live) //g; s/(live)//g' "$_f" || true
+done
+find /home -maxdepth 2 -name ".bashrc" \
+    -exec sed -i 's/(live) //g; s/(live)//g' {} \; 2>/dev/null || true
+rm -f /etc/profile.d/live-prompt.sh /etc/profile.d/live.sh 2>/dev/null || true
+
 # --- Pulizia generale ---
 rm -f /root/.bash_history
 rm -f /etc/machine-id /var/lib/dbus/machine-id
