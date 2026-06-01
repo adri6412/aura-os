@@ -52,19 +52,19 @@ fi
 
 # Dispatcher NetworkManager: sincronizza DNS VPN con AdGuard Home
 install -d /etc/NetworkManager/dispatcher.d
-printf "%s\n" \
-    "#!/bin/bash" \
-    "AGH=/opt/AdGuardHome/AdGuardHome.yaml" \
-    '[ -f "$AGH" ] || exit 0' \
-    'case "$2" in' \
-    "    vpn-up)" \
-    '        logger -t auraos-vpn "VPN up: ricarico AdGuard"' \
-    "        systemctl reload-or-restart AdGuardHome 2>/dev/null || true ;;" \
-    "    vpn-down)" \
-    '        logger -t auraos-vpn "VPN down: ripristino DNS"' \
-    "        systemctl reload-or-restart AdGuardHome 2>/dev/null || true ;;" \
-    "esac" \
-    > /etc/NetworkManager/dispatcher.d/99-auraos-vpn-dns
+{
+echo "#!/bin/bash"
+echo "AGH=/opt/AdGuardHome/AdGuardHome.yaml"
+echo "[ -f \"\$AGH\" ] || exit 0"
+echo "case \"\$2\" in"
+echo "    vpn-up)"
+echo "        logger -t auraos-vpn VPN_up"
+echo "        systemctl reload-or-restart AdGuardHome 2>/dev/null || true ;;"
+echo "    vpn-down)"
+echo "        logger -t auraos-vpn VPN_down"
+echo "        systemctl reload-or-restart AdGuardHome 2>/dev/null || true ;;"
+echo "esac"
+} > /etc/NetworkManager/dispatcher.d/99-auraos-vpn-dns
 chmod +x /etc/NetworkManager/dispatcher.d/99-auraos-vpn-dns
 
 # Il servizio NON parte automaticamente al boot (risparmio ~70MB RAM)
