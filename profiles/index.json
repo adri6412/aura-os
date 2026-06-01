@@ -37,6 +37,16 @@
       "conflicts": [],
       "default": false,
       "url": "https://adri6412.github.io/aura-os/profiles/winboat.profile"
+    },
+    {
+      "id": "ivanti",
+      "name": "Ivanti Secure Access",
+      "category": "network",
+      "description": "Client VPN Ivanti/Pulse Secure. Il .deb va scaricato dal portale aziendale.",
+      "conflicts": [],
+      "default": false,
+      "requires_deb": "Seleziona il file .deb di Ivanti Secure Access Client",
+      "url": "https://adri6412.github.io/aura-os/profiles/ivanti.profile"
     }
   ]
 }
