@@ -19,9 +19,13 @@ if [ -z "$DEB_PATH" ] || [ ! -f "$DEB_PATH" ]; then
     exit 1
 fi
 
-echo "[ivanti] Installazione dipendenze Bookworm (richieste da Ivanti su Trixie)..."
+echo "[ivanti] Installazione dipendenze Bookworm/Bullseye (richieste da Ivanti su Trixie)..."
+# libwebkit2gtk-4.0-37, libicu72 sono in Bookworm
+# libjpeg8 e libjavascriptcoregtk-4.0-18 sono stati rimossi da Bookworm: servono da Bullseye
 echo "deb http://deb.debian.org/debian bookworm main" \
-    > /etc/apt/sources.list.d/bookworm-compat-ivanti.list
+    > /etc/apt/sources.list.d/compat-ivanti.list
+echo "deb http://deb.debian.org/debian bullseye main" \
+    >> /etc/apt/sources.list.d/compat-ivanti.list
 apt-get update -qq
 
 apt-get install -y \
@@ -34,7 +38,7 @@ apt-get install -y \
     libnss3-tools \
     acl
 
-rm -f /etc/apt/sources.list.d/bookworm-compat-ivanti.list
+rm -f /etc/apt/sources.list.d/compat-ivanti.list
 apt-get update -qq
 
 echo "[ivanti] Installazione $DEB_PATH..."
