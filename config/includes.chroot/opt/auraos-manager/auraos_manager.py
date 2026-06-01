@@ -169,7 +169,10 @@ class ProfilesPage(Gtk.Box):
         is_active = pid in self._active
         is_default = p.get("default", False)
 
-        row = Adw.ActionRow(title=p["name"], subtitle=p.get("description", ""))
+        subtitle = p.get("description", "")
+        if p.get("requires_deb"):
+            subtitle = f"{subtitle} — richiede file .deb" if subtitle else "Richiede file .deb"
+        row = Adw.ActionRow(title=p["name"], subtitle=subtitle)
 
         if is_default:
             row.add_suffix(Gtk.Label(label="Default", css_classes=["dim-label"],
@@ -189,7 +192,7 @@ class ProfilesPage(Gtk.Box):
         verb = "Rimuovere" if is_active else "Applicare"
         action = "revert" if is_active else "apply"
         dialog = Adw.AlertDialog(
-            heading=f"{verb} profilo?",
+            heading=f"{verb}?",
             body=f"{profile['name']}\n\nSarà necessario riavviare il sistema."
         )
         dialog.add_response("cancel", "Annulla")
@@ -204,10 +207,36 @@ class ProfilesPage(Gtk.Box):
     def _on_confirm(self, dialog, response, profile, action):
         if response != "ok":
             return
-        self.win.show_progress(f"Operazione in corso: {profile['name']}…")
-        threading.Thread(target=self._do_apply, args=(profile, action), daemon=True).start()
+        if action == "apply" and profile.get("requires_deb"):
+            self._pick_deb_file(profile)
+        else:
+            self._start_apply(profile, action, None)
 
-    def _do_apply(self, profile, action):
+    def _pick_deb_file(self, profile):
+        title = profile.get("requires_deb")
+        if not isinstance(title, str):
+            title = "Seleziona il file .deb"
+        filt = Gtk.FileFilter()
+        filt.set_name("Pacchetti Debian (.deb)")
+        filt.add_pattern("*.deb")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(filt)
+        fd = Gtk.FileDialog(title=title, default_filter=filt, filters=filters)
+        def on_open(d, res):
+            try:
+                f = d.open_finish(res)
+                self._start_apply(profile, "apply", f.get_path())
+            except Exception:
+                pass  # utente ha annullato
+        fd.open(self.win, None, on_open)
+
+    def _start_apply(self, profile, action, deb_path):
+        self.win.show_progress(f"Operazione in corso: {profile['name']}…")
+        threading.Thread(
+            target=self._do_apply, args=(profile, action, deb_path), daemon=True
+        ).start()
+
+    def _do_apply(self, profile, action, deb_path=None):
         try:
             if action == "apply":
                 tmp = tempfile.NamedTemporaryFile(
@@ -221,8 +250,11 @@ class ProfilesPage(Gtk.Box):
                 with urllib.request.urlopen(req, timeout=15) as r:
                     tmp.write(r.read())
                 tmp.close()
+                args = [BIN_SWITCH, "apply-from", tmp.name]
+                if deb_path:
+                    args += ["--deb", deb_path]
                 rc = run_privileged(
-                    [BIN_SWITCH, "apply-from", tmp.name],
+                    args,
                     output_callback=lambda l: self.win.append_log(l)
                 )
                 os.unlink(tmp.name)
@@ -905,7 +937,7 @@ class AuraOSManagerWindow(Adw.ApplicationWindow):
 
         profiles_page = ProfilesPage(self)
         self._stack.add_titled_with_icon(
-            profiles_page, "profiles", "Profili", "preferences-system-symbolic"
+            profiles_page, "profiles", "Custom Apps", "preferences-system-symbolic"
         )
 
         updates_page = UpdatesPage(self)

@@ -303,10 +303,19 @@ case "$CMD" in
                      cmd_apply "$1" ;;
     apply-from)
         # Applicazione da file locale — usato dalla GUI (scarica senza root,
-        # poi chiama pkexec auraos-switch apply-from /tmp/file.profile).
-        [[ -n "${1:-}" ]] || { echo "Uso: auraos-switch apply-from <file.profile>" >&2; exit 1; }
-        SRC_FILE="$1"
+        # poi chiama pkexec auraos-switch apply-from /tmp/file.profile [--deb /path]).
+        [[ -n "${1:-}" ]] || { echo "Uso: auraos-switch apply-from <file.profile> [--deb <path>]" >&2; exit 1; }
+        SRC_FILE="$1"; shift
         [[ -f "$SRC_FILE" ]] || { echo "Errore: file non trovato: $SRC_FILE" >&2; exit 1; }
+        # Argomento opzionale --deb: percorso del .deb locale (es. Ivanti)
+        # Esportato come AURAOS_DEB_PATH per essere usato nel CUSTOM_APPLY_SCRIPT
+        export AURAOS_DEB_PATH=""
+        while [[ -n "${1:-}" ]]; do
+            case "$1" in
+                --deb) AURAOS_DEB_PATH="${2:-}"; shift 2 ;;
+                *)     shift ;;
+            esac
+        done
         # Ricava l'id dal nome file (rimuove path, estensione e prefissi temp)
         PROF_ID=$(basename "$SRC_FILE" .profile)
         PROF_ID="${PROF_ID##auraos-}"
