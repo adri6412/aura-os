@@ -246,9 +246,44 @@ apply_package_migrations() {
                 [ -f \"\$f\" ] && chmod +x \"\$f\" || true
             done
             # Fix Desktop di ogni utente già creato
-            find /home -maxdepth 2 -name 'adguardhome.desktop' -o \
-                       -name 'appstore.desktop' 2>/dev/null \
+            find /home -maxdepth 2 \( -name 'adguardhome.desktop' \
+                       -o -name 'appstore.desktop' \) 2>/dev/null \
                 | xargs -r chmod +x 2>/dev/null || true"
+
+    # ── v3.7 ─────────────────────────────────────────────────────────────────
+    # trust-desktop-files.sh non attendeva gvfs-metadata prima di gio set:
+    # le icone tornavano "non trusted" ad ogni riavvio.
+    # Aggiorna lo script con attesa gvfs e aggiunge X-GNOME-Autostart-Delay=3.
+    run_migration "v3.7-fix-trust-desktop-timing" \
+        bash -c "
+            SRC='$LOWER/usr/local/bin/trust-desktop-files.sh'
+            DST='/usr/local/bin/trust-desktop-files.sh'
+            for f in \"\$SRC\" \"\$DST\"; do
+                [ -f \"\$f\" ] || continue
+                grep -q '_wait_gvfs' \"\$f\" && continue
+                cat > \"\$f\" << 'SCRIPT'
+#!/bin/bash
+_wait_gvfs() {
+    for i in \$(seq 1 15); do
+        gio info \"\$HOME\" &>/dev/null 2>&1 && return 0
+        sleep 1
+    done
+    return 1
+}
+_wait_gvfs
+for f in \"\$HOME/Desktop\"/*.desktop; do
+    [ -f \"\$f\" ] || continue
+    chmod +x \"\$f\" 2>/dev/null || true
+    gio set -t string \"\$f\" \"metadata::trusted\" \"yes\" 2>/dev/null || true
+done
+SCRIPT
+                chmod +x \"\$f\"
+            done
+            for f in '$LOWER/etc/xdg/autostart/trust-desktop-files.desktop' \
+                     '/etc/xdg/autostart/trust-desktop-files.desktop'; do
+                [ -f \"\$f\" ] && grep -q 'Autostart-Delay' \"\$f\" && continue
+                [ -f \"\$f\" ] && echo 'X-GNOME-Autostart-Delay=3' >> \"\$f\" || true
+            done"
 
     chroot_umount
     unset SYSTEMD_OFFLINE
