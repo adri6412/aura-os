@@ -40,7 +40,37 @@ dpkg -i "$WINBOAT_DEB" 2>/dev/null || true
 apt-get install -f -y
 rm -f "$WINBOAT_DEB"
 
+# ── Servizio di autostart container al boot ───────────────────────────────────
+# WinBoat crea un container Docker per la VM Windows. Senza restart policy
+# il container non riparte dopo il riavvio: WinBoat vede "nessun container"
+# e ri-fa il setup perdendo le impostazioni. Il servizio winboat-autostart
+# trova e avvia i container WinBoat fermi ad ogni boot.
+cat > /etc/systemd/system/winboat-autostart.service << 'SVC'
+[Unit]
+Description=Autostart WinBoat Windows container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c '\''
+    for cid in $(docker ps -a --filter "name=windows" --format "{{.ID}}" 2>/dev/null); do
+        docker update --restart=unless-stopped "$cid" 2>/dev/null || true
+        state=$(docker inspect -f "{{.State.Status}}" "$cid" 2>/dev/null)
+        [ "$state" = "exited" ] && docker start "$cid" 2>/dev/null || true
+    done
+'\''
+
+[Install]
+WantedBy=multi-user.target
+SVC
+
+systemctl enable winboat-autostart.service 2>/dev/null || true
+
 echo "[winboat] Installazione completata."
+echo "[winboat] Nota: dopo il primo avvio di WinBoat e la configurazione di Windows,"
+echo "[winboat] il container si riavviera automaticamente ad ogni boot del sistema."
 '
 
 CUSTOM_REVERT_SCRIPT='
