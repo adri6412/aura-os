@@ -14,7 +14,7 @@
 #   sudo ./build.sh --clean       → COMPLETA: tutto da zero (~60 min)
 # =============================================================================
 
-set -e
+set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE="binary"
