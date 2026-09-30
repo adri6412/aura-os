@@ -108,7 +108,7 @@ jobs:
                 isolinux syslinux-efi grub-efi-amd64-bin grub-pc-bin \
                 mtools dosfstools rsync ca-certificates curl git \
                 >/dev/null
-              ./build.sh --clean
+              bash ./build.sh --clean
             '
 
       - name: Verifica ISO e calcola checksum
