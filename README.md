@@ -175,7 +175,7 @@ sudo auraos-update
 | Partizione | Dimensione | Tipo | Etichetta |
 |---|---|---|---|
 | EFI | 800 MiB | FAT32 | EFI |
-| Root | 10 GiB | ext4 | AuraOS |
+| Root | 20 GiB | ext4 | AuraOS |
 | Dati overlay | Spazio rimanente | ext4 | auraos-data |
 
 ---
