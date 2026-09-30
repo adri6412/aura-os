@@ -77,6 +77,15 @@ sudo ./build.sh --clean
 
 La ISO viene salvata in `output/auraos-1.0-amd64.iso`.
 
+### Build automatico con GitHub Actions
+
+Il workflow [`.github/workflows/build-iso.yml`](.github/workflows/build-iso.yml) compila la ISO su GitHub, senza bisogno di una macchina Debian locale. Gira in un container `debian:trixie` privilegiato e usa lo stesso `build.sh --clean` (~60-90 min).
+
+- **Avvio manuale** — tab *Actions* → *Build ISO* → *Run workflow*. La ISO e il suo `.sha256` vengono caricati come artifact del run (conservati 14 giorni, configurabile).
+- **Release** — con il push di un tag `v*` (es. `git tag v1.0.0 && git push origin v1.0.0`) la ISO viene pubblicata anche come GitHub Release. Se supera i 2 GiB (limite per asset) viene divisa in parti da ricomporre con `cat auraos-1.0-amd64.iso.part* > auraos-1.0-amd64.iso`.
+- **Pacchetti extra** — i `.deb` non distribuibili (Ivanti) non sono nel repo: definire il secret `IVANTI_DEB_URL` con un URL privato al pacchetto per includerlo nel build, altrimenti viene saltato.
+- In caso di errore il log `build/.build/build.log` viene caricato come artifact `build-log`.
+
 ### Test con QEMU
 
 ```bash
@@ -95,6 +104,7 @@ sudo dd if=output/auraos-1.0-amd64.iso of=/dev/sdX bs=4M status=progress conv=fs
 
 ```
 aura-os/
+├── .github/workflows/build-iso.yml  # Workflow GitHub Actions: build ISO + Release
 ├── auto/config                   # Configurazione live-build (lb config)
 ├── build.sh                      # Script di build principale
 ├── download-extras.sh            # Scarica pacchetti non inclusi in git
