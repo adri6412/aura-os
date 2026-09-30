@@ -1,0 +1,202 @@
+# =============================================================================
+# AuraOS — Build ISO con GitHub Actions
+#
+# Quando gira:
+#   - manualmente (workflow_dispatch) → ISO caricata come artifact del run
+#   - push di un tag v* (es. v1.0.0)   → ISO caricata anche come GitHub Release
+#
+# Come funziona:
+#   live-build richiede Debian 13 (trixie) e privilegi root (chroot, mount,
+#   debootstrap). Il runner ubuntu-latest non li ha nativamente, quindi il
+#   build gira dentro un container debian:trixie avviato con --privileged,
+#   con il repository montato in /work. Viene usato lo stesso build.sh dei
+#   build locali, in modalità --clean (da zero, nessuna cache tra i run).
+#
+# Pacchetti di terze parti (Ivanti):
+#   non sono nel repo. Se il secret IVANTI_DEB_URL è definito, il .deb viene
+#   scaricato in config/packages.chroot/ prima del build; altrimenti l'hook
+#   0060-ivanti lo salta (comportamento identico a download-extras.sh).
+#
+# Limiti:
+#   - build completo: ~60-90 min (timeout 6h)
+#   - GitHub Release accetta asset max 2 GiB: se la ISO è più grande viene
+#     divisa in parti (.part00, .part01, ...) da ricomporre con `cat`.
+# =============================================================================
+name: Build ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: "Giorni di conservazione dell'artifact ISO"
+        required: false
+        default: "14"
+        type: string
+  push:
+    tags:
+      - "v*"
+
+# Un solo build alla volta: il runner non ha spazio per due chroot.
+concurrency:
+  group: build-iso-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # necessario per creare la Release sui tag
+
+env:
+  ISO_NAME: auraos-1.0-amd64
+  BUILD_IMAGE: debian:trixie
+
+jobs:
+  build:
+    name: Build AuraOS ISO (amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Libera spazio disco sul runner
+        # Il runner ha ~14-20 GB liberi su /: il build ne richiede ~20.
+        # Rimuoviamo toolchain preinstallate che non servono (~25-30 GB).
+        run: |
+          echo "Prima:"; df -h / | tail -1
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/share/swift \
+            /usr/local/.ghcup \
+            /usr/lib/jvm \
+            "$AGENT_TOOLSDIRECTORY"
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          sudo apt-get clean
+          echo "Dopo:"; df -h / | tail -1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Scarica pacchetti extra (opzionale)
+        # Equivalente CI di download-extras.sh: usa un URL privato dal secret.
+        env:
+          IVANTI_DEB_URL: ${{ secrets.IVANTI_DEB_URL }}
+        run: |
+          mkdir -p config/packages.chroot
+          if [ -n "$IVANTI_DEB_URL" ]; then
+            echo "Scarico Ivanti Secure Access Client..."
+            curl -fsSL --retry 3 "$IVANTI_DEB_URL" \
+              -o config/packages.chroot/ivanti-secure-access-client.deb
+          else
+            echo "Secret IVANTI_DEB_URL non definito: il pacchetto Ivanti sarà saltato."
+          fi
+          ./download-extras.sh || true
+
+      - name: Scarica immagine di build
+        run: docker pull "$BUILD_IMAGE"
+
+      - name: Build ISO (live-build in container Debian trixie)
+        run: |
+          docker run --rm --privileged \
+            -v "$PWD:/work" -w /work \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e LANG=C.UTF-8 \
+            "$BUILD_IMAGE" bash -euo pipefail -c '
+              apt-get update -qq
+              apt-get install -y -qq --no-install-recommends \
+                live-build debootstrap squashfs-tools xorriso \
+                isolinux syslinux-efi grub-efi-amd64-bin grub-pc-bin \
+                mtools dosfstools rsync ca-certificates curl git \
+                >/dev/null
+              ./build.sh --clean
+            '
+
+      - name: Verifica ISO e calcola checksum
+        run: |
+          ISO="output/${ISO_NAME}.iso"
+          test -s "$ISO" || { echo "::error::ISO non trovata in $ISO"; exit 1; }
+          (cd output && sha256sum "${ISO_NAME}.iso" > "${ISO_NAME}.iso.sha256")
+          echo "ISO: $(du -h "$ISO" | cut -f1)"
+          cat "output/${ISO_NAME}.iso.sha256"
+          {
+            echo "## AuraOS ISO"
+            echo ""
+            echo "| File | Dimensione | SHA256 |"
+            echo "|---|---|---|"
+            echo "| \`${ISO_NAME}.iso\` | $(du -h "$ISO" | cut -f1) | \`$(cut -d' ' -f1 "output/${ISO_NAME}.iso.sha256")\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Carica ISO come artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ISO_NAME }}
+          path: |
+            output/${{ env.ISO_NAME }}.iso
+            output/${{ env.ISO_NAME }}.iso.sha256
+          compression-level: 0   # la ISO è già compressa (squashfs)
+          retention-days: ${{ github.event.inputs.retention_days || 14 }}
+          if-no-files-found: error
+
+      - name: Carica log di build (in caso di errore)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: |
+            build/.build/build.log
+            build/chroot.packages.live
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Prepara asset per la Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mkdir -p release
+          ISO="output/${ISO_NAME}.iso"
+          LIMIT=$((2 * 1024 * 1024 * 1024 - 1024 * 1024))   # 2 GiB meno margine
+          SIZE=$(stat -c %s "$ISO")
+          cp "output/${ISO_NAME}.iso.sha256" release/
+          if [ "$SIZE" -gt "$LIMIT" ]; then
+            echo "ISO di $SIZE byte supera il limite di 2 GiB per asset: la divido in parti."
+            split -b 1900M -d -a 2 "$ISO" "release/${ISO_NAME}.iso.part"
+            echo "SPLIT=true" >> "$GITHUB_ENV"
+          else
+            cp "$ISO" release/
+            echo "SPLIT=false" >> "$GITHUB_ENV"
+          fi
+          ls -lh release/
+
+      - name: Scrivi note di Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          {
+            echo "AuraOS ${GITHUB_REF_NAME} — immagine live/installabile amd64 (Debian 13 Trixie)."
+            echo ""
+            echo "**SHA256:** \`$(cut -d' ' -f1 "output/${ISO_NAME}.iso.sha256")\`"
+            echo ""
+            if [ "$SPLIT" = "true" ]; then
+              echo "La ISO supera i 2 GiB ed è divisa in più parti. Per ricomporla:"
+              echo ""
+              echo '```bash'
+              echo "cat ${ISO_NAME}.iso.part* > ${ISO_NAME}.iso"
+              echo "sha256sum -c ${ISO_NAME}.iso.sha256"
+              echo '```'
+            else
+              echo "Verifica: \`sha256sum -c ${ISO_NAME}.iso.sha256\`"
+            fi
+            echo ""
+            echo "Test con QEMU:"
+            echo '```bash'
+            echo "qemu-system-x86_64 -cdrom ${ISO_NAME}.iso -m 4G -boot d -enable-kvm -cpu host"
+            echo '```'
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Pubblica GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: AuraOS ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: release/*
+          fail_on_unmatched_files: true
